@@ -1,0 +1,50 @@
+# Unit normalization.
+#
+# The §10 "unit chaos" trap, made explicit and reviewable. Portals mix kg, litre
+# and per-ekor pricing, sometimes for the same commodity. A missed conversion
+# produces a 10x "anomaly" that looks exactly like a finding, so every rule that
+# rewrites a price lives here where it can be checked, not inside a scraper.
+#
+# Confirmed in the wild (2026-07-28):
+#   siskaperbapo  "Minyak Goreng Curah"  -> kg        (our canonical: litre)
+#   siskaperbapo  "Minyak Goreng Kemasan Premium" -> "1 liter"
+#   sp2kp         "Minyak Goreng Sawit Curah"     -> "lt"
+#   siskaperbapo  "Daging Ayam Kampung"  -> ekor      (not tracked, but present)
+
+version: 1
+updated: 2026-07-28
+
+# Raw unit strings, case-folded and whitespace-collapsed, mapped to a canonical
+# token. Anything not listed here raises during normalization rather than being
+# assumed to be kilograms.
+aliases:
+  kg: [kg, kilogram, "kg.", kgs]
+  liter: [lt, ltr, liter, litre, "1 liter", "1 lt", "per liter"]
+  butir: [butir, biji]
+  ekor: [ekor]
+  # Fixed-weight packaging seen on siskaperbapo. Not converted — these belong to
+  # commodities outside our 12, and inventing a per-kg price from a 370 gr tin
+  # would be fabrication, not normalization.
+  pack: ["370 gr/kl", "400 gr/dos", "40 kg", bungkus, bks, buah, btg, lembar, dos]
+
+# price_canonical = price_raw * factor
+#
+# Only conversions we can justify physically are listed. Anything absent is a
+# refusal: normalization raises rather than guessing a factor.
+conversions:
+  - from: kg
+    to: liter
+    # Palm cooking oil density at ambient temperature, ~0.91 kg/L. One litre
+    # weighs 0.91 kg, so a per-kg price becomes per-litre by multiplying by
+    # 0.91. Applies to the two minyak goreng commodities only.
+    factor: 0.91
+    applies_to: [minyak-goreng-curah, minyak-goreng-kemasan]
+    note: >-
+      Density of refined palm olein, ~0.91 kg/L at 20 C. Used only where a
+      portal publishes cooking oil by weight while our canonical unit is volume.
+
+  - from: liter
+    to: kg
+    factor: 1.098901
+    applies_to: [minyak-goreng-curah, minyak-goreng-kemasan]
+    note: Reciprocal of the above, retained for completeness.
