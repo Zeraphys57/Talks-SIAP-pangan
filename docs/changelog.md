@@ -79,6 +79,26 @@ jogja and PIHPS agree to **0.03%** through completely independent inference
 paths. Had jogja's `satuan` been trusted, it would have read ~16,972 — 9% below
 both neighbours.
 
+### Google Trends is currently throttled to zero
+
+Every request on 2026-07-29 returned HTTP 429, across all keywords and both
+scopes, through three attempts each with exponential backoff. `demand_signals`
+is therefore **empty**, and 24 `fetch_failures` rows record why.
+
+The degradation path works exactly as the brief specifies — the run does not
+fail, and fusion's `D` term will evaluate to 0 with a recorded reason. But the
+consequence should be stated plainly rather than discovered at M6:
+
+* **The `D` component contributes nothing until Trends succeeds.** Fusion still
+  works; it is effectively `0.45·A + 0.25·M + 0.10·C` renormalised, and the
+  weight sweep in M7 will show `D`'s contribution as zero rather than small.
+* This is a property of the *unofficial wrapper*, not of the method. It may
+  clear on a different network or IP, or with a slower cadence.
+* If it does not clear, the honest options are to report `D` as unavailable and
+  ablate it out, or to substitute a different demand proxy. Quietly leaving a
+  weighted term at zero while presenting the formula as four-component would
+  misrepresent the model.
+
 ### Open questions carried into M2
 
 * **The 0.91 kg/L density constant.** siskaperbapo's per-kg oil implies 0.9446
