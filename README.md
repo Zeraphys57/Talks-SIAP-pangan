@@ -43,6 +43,13 @@ siap migrate                  # apply supabase/migrations/*.sql in order
 siap seed                     # load reference data from engine/config/*.yaml
 siap doctor                   # verify schema, RLS posture and seeded data
 
+# ingestion
+siap ingest                              # yesterday, all active sources
+siap ingest --source pihps --date 2026-07-27
+siap backfill --source pihps --start 2023-07-29 --end 2026-07-29   # resumable
+siap trends                              # demand signal; best-effort
+siap coverage --detail --samples 5       # coverage + provenance samples
+
 # web
 cd ../web
 cp .env.example .env.local    # then fill in the two NEXT_PUBLIC_ values
@@ -107,3 +114,20 @@ are recorded in [`docs/changelog.md`](docs/changelog.md).
 writes a `fetch_failures` row. Every number rendered in the UI traces to a row
 in Postgres, which traces to a `raw_snapshots` entry, which traces to a URL and
 a fetch timestamp.
+
+## Data sources
+
+| source | owner | status | archive |
+|---|---|---|---|
+| `sp2kp` | Kementerian Perdagangan | ✅ | 2024-02-01 → |
+| `pihps` | Bank Indonesia | ✅ | 3 years |
+| `siskaperbapo` | Pemprov Jawa Timur | ✅ | 3 years |
+| `jogja` | Pemkot Yogyakarta | ✅ forward-only | none available |
+| `panelharga` | Badan Pangan Nasional | ❌ disabled | upstream outage |
+| `trends` | Google Trends (pytrends) | best-effort | up to 5 years |
+
+Endpoints, quirks and every judgement call are documented in
+[`docs/sources.md`](docs/sources.md). Scraping conduct — robots.txt, a ≥2 s
+delay, one connection per host, and a User-Agent naming the project and a
+contact address — is enforced centrally in the scraper base class, not per
+scraper.
