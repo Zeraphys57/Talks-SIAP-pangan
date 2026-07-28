@@ -72,6 +72,12 @@ class PihpsScraper(BaseScraper):
     source_slug = "pihps"
     parser_version = "pihps-2026-07-29"
 
+    # Asking for three years at once makes the server exceed a 30 s read
+    # timeout — the grid is pivoted, so a long range means one enormous row per
+    # commodity. 120 days keeps each response comfortably small while still
+    # covering three years in about ten requests per province.
+    range_chunk_days = 120
+
     def fetch_day(self, obs_date: date) -> list[RawObservation]:
         return self.fetch_range(obs_date, obs_date)
 

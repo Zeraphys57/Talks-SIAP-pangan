@@ -19,6 +19,7 @@ from .normalize import Normalizer
 from .runs import Run, start_run
 from .scrapers.base import BaseScraper, FetchError, PoliteClient
 from .scrapers.jogja import JogjaScraper
+from .scrapers.panelharga import PanelhargaScraper
 from .scrapers.pihps import PihpsScraper
 from .scrapers.siskaperbapo import SiskaperbapoScraper
 from .scrapers.sp2kp import Sp2kpScraper
@@ -33,6 +34,9 @@ SCRAPERS: dict[str, type[BaseScraper]] = {
     "siskaperbapo": SiskaperbapoScraper,
     "pihps": PihpsScraper,
     "jogja": JogjaScraper,
+    # Disabled in sources.yaml (upstream outage). Present so that an explicit
+    # run still records a fetch_failures row rather than reporting "no scraper".
+    "panelharga": PanelhargaScraper,
 }
 
 
@@ -169,35 +173,38 @@ def ingest_backfill(
             # PIHPS covers three years in three requests this way instead of
             # 1,095 — the difference between seconds and hours of polite waiting.
             if hasattr(scraper, "fetch_range"):
-                try:
-                    raws = scraper.fetch_range(start, end)
-                    result = normalizer.normalize_batch(raws)
-                    persisted = normalizer.persist(result.accepted)
-                    run.note(
-                        f"{source_slug}: range {start}..{end} -> {persisted} observation(s) "
-                        f"from {len(raws)} raw point(s)"
-                    )
-                    reports.append(
-                        DayReport(
-                            source_slug=f"{source_slug}:range",
-                            obs_date=end,
-                            raw_rows=len(raws),
-                            persisted=persisted,
-                            rejected=[
-                                f"{r.commodity_name_raw}: {w}" for r, w in result.rejected[:20]
-                            ],
-                            ignored_names=result.ignored_names,
+                for chunk_start, chunk_end in _chunks(start, end, scraper.range_chunk_days):
+                    try:
+                        raws = scraper.fetch_range(chunk_start, chunk_end)
+                        result = normalizer.normalize_batch(raws)
+                        persisted = normalizer.persist(result.accepted)
+                        run.note(
+                            f"{source_slug}: {chunk_start}..{chunk_end} -> {persisted} "
+                            f"observation(s) from {len(raws)} raw point(s)"
                         )
-                    )
-                except FetchError as exc:
-                    run.note(f"{source_slug}: range fetch failed: {exc}")
-                    reports.append(
-                        DayReport(
-                            source_slug=f"{source_slug}:range",
-                            obs_date=end,
-                            error=f"{exc.error_class}: {exc}",
+                        reports.append(
+                            DayReport(
+                                source_slug=f"{source_slug}:range",
+                                obs_date=chunk_end,
+                                raw_rows=len(raws),
+                                persisted=persisted,
+                                rejected=[
+                                    f"{r.commodity_name_raw}: {w}" for r, w in result.rejected[:10]
+                                ],
+                                ignored_names=result.ignored_names,
+                            )
                         )
-                    )
+                    except FetchError as exc:
+                        # One failed window must not abandon the rest of the
+                        # backfill; the gap is recorded and the walk continues.
+                        run.note(f"{source_slug}: {chunk_start}..{chunk_end} failed: {exc}")
+                        reports.append(
+                            DayReport(
+                                source_slug=f"{source_slug}:range",
+                                obs_date=chunk_end,
+                                error=f"{exc.error_class}: {exc}",
+                            )
+                        )
                 return reports
 
             # National history arrives as one range request per commodity, so it
@@ -235,6 +242,19 @@ def ingest_backfill(
     finally:
         run.finish("partial" if any(not r.ok for r in reports) else "success")
     return reports
+
+
+def _chunks(start: date, end: date, chunk_days: int | None) -> list[tuple[date, date]]:
+    """Split [start, end] into inclusive windows of at most `chunk_days`."""
+    if chunk_days is None or chunk_days <= 0:
+        return [(start, end)]
+    windows: list[tuple[date, date]] = []
+    cursor = start
+    while cursor <= end:
+        window_end = min(cursor + timedelta(days=chunk_days - 1), end)
+        windows.append((cursor, window_end))
+        cursor = window_end + timedelta(days=1)
+    return windows
 
 
 def _dates_with_data(conn: Conn, source_slug: str) -> set[date]:

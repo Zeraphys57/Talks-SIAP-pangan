@@ -244,5 +244,135 @@ def backfill_cmd(source: str, start: datetime, end: datetime, no_skip_existing: 
     click.echo(f"\n{len(reports)} day(s) processed, {total} observation(s) stored")
 
 
+@cli.command("trends")
+@click.option(
+    "--timeframe",
+    default="today 5-y",
+    show_default=True,
+    help="pytrends timeframe string, e.g. 'today 5-y' or '2023-07-29 2026-07-29'.",
+)
+def trends_cmd(timeframe: str) -> None:
+    """Collect the Google Trends demand signal into demand_signals.
+
+    Best effort by design: pytrends wraps an undocumented, rate-limited
+    endpoint. Failures are recorded and the fusion D term degrades to 0 rather
+    than the run failing.
+    """
+    from .runs import start_run
+    from .scrapers.trends import TrendsCollector, TrendsReport
+
+    report = TrendsReport()
+    try:
+        with connect() as conn:
+            run = start_run(conn, "trends", params={"timeframe": timeframe})
+            status = "failed"
+            try:
+                report = TrendsCollector(conn, run).collect(timeframe)
+                status = "success" if report.ok else "partial"
+            finally:
+                run.finish(status)
+    except (MissingSetting, DatabaseError, ConfigError) as exc:
+        _fatal(str(exc))
+        return
+
+    click.echo(f"  requested : {report.requested}")
+    click.echo(f"  stored    : {report.stored} weekly point(s)")
+    if report.failures:
+        click.echo(click.style(f"  failures  : {len(report.failures)}", fg="yellow"))
+        for why in report.failures[:10]:
+            click.echo(f"      {why}")
+
+
+@cli.command("coverage")
+@click.option("--samples", default=5, show_default=True, help="Random observations to print.")
+@click.option("--seed", default=None, type=int, help="Seed the sample draw for reproducibility.")
+@click.option("--detail/--no-detail", default=False, help="Per commodity x region breakdown.")
+def coverage_cmd(samples: int, seed: int | None, detail: bool) -> None:
+    """Coverage table and provenance samples — the M1 stop-gate evidence."""
+    from .coverage import (
+        coverage_by_source,
+        coverage_detail,
+        gaps,
+        random_samples,
+        weeks_covered,
+    )
+
+    try:
+        with connect() as conn:
+            by_source = coverage_by_source(conn)
+            detail_rows = coverage_detail(conn) if detail else []
+            weeks = weeks_covered(conn)
+            picks = random_samples(conn, samples, seed)
+            failures = gaps(conn)
+    except (MissingSetting, DatabaseError, ConfigError) as exc:
+        _fatal(str(exc))
+        return
+
+    click.echo("=" * 96)
+    click.echo("COVERAGE BY SOURCE")
+    click.echo("=" * 96)
+    click.echo(f"  {'source':<14}{'rows':>9}{'days':>7}{'com':>5}{'reg':>5}   first        last")
+    for r in by_source:
+        click.echo(
+            f"  {r['source']!s:<14}{int(r['n_rows']):>9,}{int(r['distinct_days']):>7}"
+            f"{int(r['n_commodities']):>5}{int(r['n_regions']):>5}   "
+            f"{r['first_date']}   {r['last_date']}"
+        )
+    if not by_source:
+        click.echo("  (no observations yet)")
+
+    click.echo()
+    click.echo("=" * 96)
+    click.echo("WEEKS COVERED PER COMMODITY x REGION  (M5 STL needs >= 104)")
+    click.echo("=" * 96)
+    for r in weeks:
+        n_weeks = int(r["n_weeks"])
+        mark = "ok " if n_weeks >= 104 else "SHORT"
+        colour = "green" if n_weeks >= 104 else "yellow"
+        click.echo(
+            f"  [{click.style(mark, fg=colour)}] {r['region']!s:<17}{r['commodity']!s:<24}"
+            f"{n_weeks:>5} wk   {r['first_date']} .. {r['last_date']}"
+        )
+
+    if detail:
+        click.echo()
+        click.echo("=" * 96)
+        click.echo("COVERAGE DETAIL  (source x commodity x region)")
+        click.echo("=" * 96)
+        for row in detail_rows:
+            click.echo(
+                f"  {row.source:<14}{row.region:<17}{row.commodity:<24}"
+                f"{row.n_rows:>6} rows  {row.first_date} .. {row.last_date}"
+                f"  missing {row.missing_pct:5.1f}%"
+            )
+
+    click.echo()
+    click.echo("=" * 96)
+    click.echo(f"RANDOM SAMPLES  ({len(picks)}) — OPEN THESE URLS AND CHECK THE NUMBERS")
+    click.echo("=" * 96)
+    for i, p in enumerate(picks, start=1):
+        click.echo(f"\n  [{i}] {p['source']} / {p['region']} / {p['commodity']}  {p['obs_date']}")
+        click.echo(
+            f"      price          : Rp {float(p['price_idr']):,.2f} per {p['canonical_unit']}"
+            f"   (raw_unit={p['raw_unit']}, factor={p['unit_factor']})"
+        )
+        click.echo(f"      url            : {p['url']}")
+        click.echo(f"      fetched_at     : {p['fetched_at']}")
+        click.echo(f"      http_status    : {p['http_status']}")
+        click.echo(f"      parser_version : {p['parser_version']}")
+
+    click.echo()
+    click.echo("=" * 96)
+    click.echo(f"RECORDED FETCH FAILURES  (most recent {len(failures)})")
+    click.echo("=" * 96)
+    for f in failures:
+        click.echo(
+            f"  {f['attempted_at']:%Y-%m-%d %H:%M}  {f['source']!s:<14}"
+            f"{f['error_class']!s:<20} {str(f['detail'])[:70]}"
+        )
+    if not failures:
+        click.echo("  (none)")
+
+
 if __name__ == "__main__":  # pragma: no cover
     cli()

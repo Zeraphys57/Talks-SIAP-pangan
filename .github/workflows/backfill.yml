@@ -1,0 +1,87 @@
+name: Historical backfill
+
+# Manual only. Backfill is long, rate-limited by politeness rather than by the
+# servers, and writes a lot of rows — it should never fire on a schedule.
+#
+# The job is resumable: `siap backfill` skips dates that already have data for
+# the source, so a run cancelled at the six-hour mark can simply be started
+# again and will continue from where it stopped.
+#
+# Cost per source, at the mandated 2 s delay:
+#   pihps         ~10 requests per province   (date-range endpoint) — minutes
+#   sp2kp         national: 12 requests       (date-range endpoint) — seconds
+#                 provincial: 12 x days       (one per commodity per day) — hours
+#   siskaperbapo  1 request per day           — under an hour for 3 years
+#   jogja         not supported: no archive endpoint exists
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Source slug to backfill"
+        required: true
+        type: choice
+        options: [pihps, sp2kp, siskaperbapo]
+      start:
+        description: "Start date (YYYY-MM-DD)"
+        required: true
+        type: string
+      end:
+        description: "End date (YYYY-MM-DD)"
+        required: true
+        type: string
+      refetch:
+        description: "Re-fetch dates that already have data"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  # One backfill at a time, and never concurrent with the daily ingest.
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    name: backfill ${{ inputs.source }}
+    runs-on: ubuntu-latest
+    # GitHub caps a job at 6 hours. A long provincial backfill will be cut off;
+    # that is expected and safe — re-running resumes.
+    timeout-minutes: 350
+    defaults:
+      run:
+        working-directory: engine
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: engine/pyproject.toml
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Backfill
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SIAP_CONTACT_EMAIL: ${{ secrets.SIAP_CONTACT_EMAIL }}
+        run: |
+          extra=""
+          if [ "${{ inputs.refetch }}" = "true" ]; then extra="--no-skip-existing"; fi
+          siap backfill \
+            --source "${{ inputs.source }}" \
+            --start "${{ inputs.start }}" \
+            --end "${{ inputs.end }}" \
+            $extra
+
+      - name: Coverage report
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: siap coverage

@@ -316,6 +316,12 @@ class BaseScraper(ABC):
     source_slug: str
     parser_version: str
 
+    # For scrapers exposing `fetch_range`: the largest window to request in one
+    # call. A portal that accepts a date range will still time out if asked for
+    # three years at once, so backfill walks the period in chunks this wide.
+    # None means "no limit" (the range is requested whole).
+    range_chunk_days: int | None = None
+
     def __init__(self, conn: Conn, client: PoliteClient, run: Run) -> None:
         self.conn = conn
         self.client = client

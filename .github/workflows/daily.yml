@@ -1,0 +1,99 @@
+name: Daily ingestion
+
+# Collects yesterday's prices from every active source, then refreshes the
+# Google Trends demand signal.
+#
+# 02:00 WIB = 19:00 UTC the previous day. Indonesian portals publish through the
+# working day, so running just after midnight local time picks up a settled
+# figure rather than a partially-reported one.
+#
+# The job deliberately ingests **yesterday**, not today: several portals verify
+# and publish in the afternoon, and asking for a date they have not finished
+# reporting produces a thin day that looks like a market event.
+
+on:
+  schedule:
+    - cron: "0 19 * * *"   # 02:00 WIB
+  workflow_dispatch:
+    inputs:
+      obs_date:
+        description: "Date to ingest (YYYY-MM-DD). Defaults to yesterday WIB."
+        required: false
+        type: string
+      sources:
+        description: "Space-separated source slugs. Defaults to all active."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never let two ingest runs write the same day at once.
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    name: ingest
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: engine
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: engine/pyproject.toml
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Resolve target date (WIB)
+        id: target
+        working-directory: .
+        run: |
+          if [ -n "${{ inputs.obs_date }}" ]; then
+            echo "date=${{ inputs.obs_date }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "date=$(TZ=Asia/Jakarta date -d 'yesterday' +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ingest prices
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SIAP_CONTACT_EMAIL: ${{ secrets.SIAP_CONTACT_EMAIL }}
+        run: |
+          if [ -n "${{ inputs.sources }}" ]; then
+            args=""
+            for s in ${{ inputs.sources }}; do args="$args --source $s"; done
+            siap ingest --date "${{ steps.target.outputs.date }}" $args
+          else
+            siap ingest --date "${{ steps.target.outputs.date }}"
+          fi
+
+      # Trends is best-effort: pytrends wraps a rate-limited, undocumented
+      # endpoint. A failure here must not fail the run, because the price data
+      # above is the part that matters and fusion's D term degrades to 0 with a
+      # recorded reason.
+      - name: Refresh demand signal (best effort)
+        continue-on-error: true
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SIAP_CONTACT_EMAIL: ${{ secrets.SIAP_CONTACT_EMAIL }}
+        run: siap trends --timeframe "today 5-y"
+
+      - name: Health check
+        if: always()
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: siap doctor
