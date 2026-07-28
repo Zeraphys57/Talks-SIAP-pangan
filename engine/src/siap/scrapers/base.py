@@ -410,8 +410,24 @@ class BaseScraper(ABC):
         except Exception as exc:
             self.record_failure(url, type(exc).__name__, str(exc))
             raise
+
+        # The body is stored even when the status is an error: a 401 page is
+        # evidence of the outage and worth keeping alongside its timestamp.
         snapshot_id = self.store_snapshot(fetched)
         self.conn.commit()
+
+        if not 200 <= fetched.status_code < 300:
+            detail = fetched.body[:500].decode("utf-8", "replace")
+            self.record_failure(
+                fetched.url, f"http_{fetched.status_code}", detail, fetched.attempts
+            )
+            raise FetchError(
+                f"{fetched.url} returned HTTP {fetched.status_code}: {detail[:200]}",
+                error_class=f"http_{fetched.status_code}",
+                url=fetched.url,
+                retry_count=fetched.attempts,
+            )
+
         return fetched, snapshot_id
 
     # -- the thing subclasses implement -------------------------------------

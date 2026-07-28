@@ -77,6 +77,18 @@ def ingest_day(
         raws = scraper.fetch_day(obs_date)
     except FetchError as exc:
         report.error = f"{exc.error_class}: {exc}"
+        run.note(f"{source_slug} {obs_date}: {report.error}")
+        return report
+    except Exception as exc:
+        # A parsing bug or an unexpected payload in one source must not abort
+        # the whole daily run — the other sources still have data to collect.
+        # The failure is recorded so the resulting gap stays explainable.
+        report.error = f"{type(exc).__name__}: {exc}"
+        run.note(f"{source_slug} {obs_date}: {report.error}")
+        try:
+            scraper.record_failure(None, type(exc).__name__, str(exc))
+        except Exception:  # pragma: no cover - never mask the original error
+            log.exception("could not record failure for %s", source_slug)
         return report
 
     report.raw_rows = len(raws)
