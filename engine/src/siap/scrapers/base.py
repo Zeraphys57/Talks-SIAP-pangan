@@ -293,7 +293,9 @@ class RawObservation:
     region_slug: str
     obs_date: date
     commodity_name_raw: str
-    price_raw: float
+    # str for HTML sources, which publish Indonesian-formatted text ("12.508");
+    # float for JSON APIs. Parsing is normalize.py's job, and is unit-tested.
+    price_raw: float | str
     unit_raw: str | None
     snapshot_id: int | None = None
     extra: dict[str, Any] = field(default_factory=dict)

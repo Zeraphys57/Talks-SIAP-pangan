@@ -108,6 +108,57 @@ Real rows from `2023-07-28`, which validate three of the brief's §10 traps:
 
 ---
 
+## Cross-source validation (2026-07-27, jawa_timur)
+
+SP2KP and siskaperbapo survey different markets by different methods, and are
+implemented by entirely separate code paths — a JSON API versus an HTML table
+with Indonesian-formatted numbers. Their agreement is therefore a real check on
+parsing, alias mapping and unit conversion all at once:
+
+| commodity | siskaperbapo | sp2kp | gap |
+|---|---:|---:|---:|
+| beras-medium | 12,985.00 | 13,045.37 | 0.5% |
+| beras-premium | 15,000.00 | 14,828.45 | 1.2% |
+| cabai-merah-keriting | 30,933.00 | 30,815.48 | 0.4% |
+| cabai-rawit-merah | 38,330.00 | 37,065.79 | 3.4% |
+| bawang-merah | 30,923.00 | 30,907.90 | 0.05% |
+| telur-ayam-ras | 25,041.00 | 24,910.97 | 0.5% |
+| daging-ayam-ras | 33,995.00 | 33,846.93 | 0.4% |
+| daging-sapi | 127,309.00 | 127,331.14 | 0.02% |
+| **minyak-goreng-curah** | **18,496.66** | **19,199.05** | **3.7%** |
+| minyak-goreng-kemasan | 21,768.00 | 21,669.82 | 0.5% |
+| gula-pasir | 17,166.00 | 16,897.22 | 1.6% |
+
+Most commodities agree within ~1%, and `daging-sapi` to within 0.02%. That is
+strong evidence the pipeline is not silently corrupting anything.
+
+### Open question for M2: the cooking-oil density constant
+
+`minyak-goreng-curah` is the single largest disagreement, and it is also the
+only row that undergoes a unit conversion. siskaperbapo published Rp 20,326/kg;
+SP2KP published Rp 19,199.05/**litre** natively for the same region and day.
+
+That implies a density of `19,199.05 / 20,326 = 0.9446 kg/L`, against the
+**0.91** currently configured in `units.yaml`.
+
+Two readings, and they are not yet distinguishable:
+
+1. The constant is too low. Refined palm olein at Indonesian ambient
+   temperatures may sit nearer 0.91–0.92; some published figures for crude and
+   blended cooking oils run higher.
+2. The two portals simply surveyed different markets, and a 3.7% spread is
+   ordinary between-source variation — several unconverted commodities here
+   differ by 1.2–3.4% with no conversion involved at all.
+
+**Not changed on the strength of one day's data.** Once the backfill has run,
+the same comparison across hundreds of days will separate a systematic offset
+from noise: a constant error shows as a stable ratio, market variation does
+not. That test belongs in M2's cross-source reconciliation report, and the
+outcome — including "we left it at 0.91" — goes in `docs/methods.md`.
+
+Until then the conversion is recorded per row in `price_observations.unit_factor`,
+so any later correction can be applied retroactively without re-scraping.
+
 ## pihps — Bank Indonesia ✅ viable
 
 **Table pages**, one per price level and pivot:
