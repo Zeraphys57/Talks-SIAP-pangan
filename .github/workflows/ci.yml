@@ -1,0 +1,113 @@
+name: CI
+
+# Lint, type-check and test on every push and pull request.
+#
+# This workflow deliberately needs NO database and NO secrets. Everything it
+# runs is either static analysis or a test that operates on files in the repo,
+# so a fork can run it and a failure always means the code is wrong rather than
+# the environment being unavailable.
+#
+# Ingestion and analysis run on their own schedules (added in M1), not here.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  engine:
+    name: engine (python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: engine/pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Format check (ruff)
+        run: ruff format --check .
+
+      - name: Type check (mypy)
+        run: mypy
+
+      - name: Test (pytest)
+        run: pytest -v
+
+  web:
+    name: web (next.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      # No Supabase keys are provided. The build must succeed without them:
+      # anything that reads live data has to degrade to an empty state rather
+      # than fail, which is also the behaviour a visitor gets when a scrape
+      # has not run yet.
+      - name: Build
+        run: pnpm build
+
+  secrets:
+    name: no service-role key in web/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # SUPABASE_SERVICE_ROLE_KEY bypasses every RLS policy. If it ever reaches
+      # the browser bundle, every raw snapshot, per-source price and unblinded
+      # ground-truth candidate becomes public. Cheap check, catastrophic miss.
+      - name: Assert the service role key is never referenced under web/
+        run: |
+          if grep -rn --exclude-dir=node_modules --exclude-dir=.next \
+               -e 'SERVICE_ROLE' -e 'service_role' web/; then
+            echo "::error::A service-role reference was found under web/. It must never leave the engine."
+            exit 1
+          fi
+          echo "OK: no service-role reference under web/"
+
+      - name: Assert no .env file is committed
+        run: |
+          if git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example'; then
+            echo "::error::A .env file is tracked by git."
+            exit 1
+          fi
+          echo "OK: no tracked .env files"

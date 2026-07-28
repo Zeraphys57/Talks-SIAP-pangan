@@ -1,0 +1,11 @@
+# pnpm 11 reads settings from here rather than from package.json's "pnpm" field.
+#
+# Native postinstall scripts are blocked by default in pnpm 10+. These two are
+# approved deliberately, not blanket-enabled:
+#   sharp          Next.js image optimization; fetches a platform-specific binary.
+#   unrs-resolver  Rust module resolver used by the Next ESLint config.
+# Anything else that wants to run a build script fails loudly and needs an
+# explicit decision recorded here first.
+allowBuilds:
+  sharp: true
+  unrs-resolver: true

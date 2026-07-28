@@ -1,0 +1,140 @@
+# Reference data: the five upstream data sources.
+# Seeded into the `sources` table by `siap seed`.
+#
+# CORRECTIONS TO THE ORIGINAL PROPOSAL, applied here deliberately:
+#   1. Panel Harga (Badan Pangan Nasional) and SP2KP (Kementerian Perdagangan)
+#      are two separate systems run by two different ministries. The proposal
+#      conflates them. They are modelled as distinct sources.
+#   2. SISKAPERBAPO belongs to Pemprov JAWA TIMUR (East Java), not Jawa
+#      Tengah / DIY as the proposal states. Its region scope is set accordingly.
+#   3. Google Trends is accessed through `pytrends`, an UNOFFICIAL community
+#      wrapper around an undocumented endpoint. It is not an official Google
+#      API, it is rate-limited, and it is treated as best-effort throughout.
+# See docs/changelog.md.
+#
+# Reachability of every `base_url` below was confirmed (HTTP 200) on 2026-07-28.
+# That is a liveness check only. M1 verifies the actual data paths, prefers any
+# JSON endpoint sitting behind the UI over HTML parsing, and documents each
+# endpoint plus its obs_date convention in docs/sources.md.
+
+version: 1
+updated: 2026-07-28
+
+# Scraping conduct — applies to every HTTP source below, without exception.
+# Enforced centrally in the scraper base class (M1), never per-scraper.
+conduct:
+  respect_robots_txt: true
+  min_delay_seconds: 2.0
+  max_concurrent_per_host: 1
+  # {contact} is substituted from SIAP_CONTACT_EMAIL at runtime. A portal
+  # operator must be able to reach the team instead of silently blocking us.
+  user_agent: "SIAP-PANGAN/0.1 (Universitas Atma Jaya Yogyakarta academic research; contact: {contact})"
+  timeout_seconds: 30
+  max_retries: 3
+  backoff_base_seconds: 5
+
+sources:
+  # DISABLED 2026-07-28 — upstream outage, not an access restriction.
+  # The portal's own frontend is broken: it renders blank and its API answers
+  # 401 "Invalid or missing API key" to the key embedded in its own deployed
+  # bundle. Verified in a real browser session; see docs/sources.md.
+  # The scraper is implemented against the documented /front/* contract and
+  # every attempt writes a fetch_failures row, so the outage stays visible in
+  # the data. Flip is_active back to true if Bapanas restores service.
+  - slug: panelharga
+    display_name: Panel Harga Pangan
+    owner: Badan Pangan Nasional (Bapanas)
+    base_url: https://panelharga.badanpangan.go.id/
+    robots_url: https://panelharga.badanpangan.go.id/robots.txt
+    scope: national+provincial
+    cadence: daily
+    regions: [nasional, jawa_tengah, di_yogyakarta, jawa_timur]
+    obs_date_convention: null
+    is_active: false
+    notes: >-
+      National and provincial daily reference prices at consumer level.
+      Distinct system from SP2KP despite overlapping commodity coverage.
+      Disabled: upstream API returns 401 to its own frontend's key.
+
+  # Promoted to the primary source. Its province-comparison endpoint returns all
+  # 37 provinces per commodity per day, which covers every region Panel Harga
+  # would have supplied.
+  - slug: sp2kp
+    display_name: SP2KP — Sistem Pemantauan Pasar dan Kebutuhan Pokok
+    owner: Kementerian Perdagangan
+    base_url: https://api-sp2kp.kemendag.go.id/
+    robots_url: https://sp2kp.kemendag.go.id/robots.txt
+    scope: national+provincial
+    cadence: daily
+    regions: [nasional, jawa_tengah, di_yogyakarta, jawa_timur]
+    obs_date_convention: same_day_wib
+    is_active: true
+    notes: >-
+      Ministry of Trade market monitoring. Separate system from Panel Harga;
+      the original proposal conflates the two. Unauthenticated JSON API;
+      the reCAPTCHA on the web UI guards the survey and login, not the data.
+      Archive via /report/api/hnt/history-series begins 2024-02-01.
+
+  - slug: pihps
+    display_name: PIHPS Nasional — Pusat Informasi Harga Pangan Strategis
+    owner: Bank Indonesia
+    base_url: https://www.bi.go.id/hargapangan
+    robots_url: https://www.bi.go.id/robots.txt
+    scope: provincial
+    cadence: weekly
+    regions: [jawa_tengah, di_yogyakarta, jawa_timur]
+    obs_date_convention: null
+    is_active: true
+    notes: >-
+      Bank Indonesia survey of traditional and modern markets. Roughly weekly
+      cadence, so it contributes fewer rows than the daily portals and must not
+      be expected to corroborate every daily observation.
+
+  - slug: siskaperbapo
+    display_name: SISKAPERBAPO — Sistem Informasi Ketersediaan dan Perkembangan Harga Bahan Pokok
+    owner: Dinas Perindustrian dan Perdagangan, Pemprov Jawa Timur
+    base_url: https://siskaperbapo.jatimprov.go.id/
+    robots_url: https://siskaperbapo.jatimprov.go.id/robots.txt
+    scope: provincial
+    cadence: daily
+    regions: [jawa_timur]
+    obs_date_convention: same_day_wib
+    is_active: true
+    notes: >-
+      East Java kabupaten/kota level daily prices, consumer level. Data via
+      POST /harga/tabel.nodesign/ with tanggal/kabkota/pasar. Archive verified
+      back 3 years. Publishes minyak goreng curah in kg, not litre, and prices
+      as Indonesian-formatted strings (12.508 = twelve thousand five hundred
+      and eight).
+
+  - slug: jogja
+    display_name: Sistem Informasi Harga Pangan Kota Yogyakarta
+    owner: Pemerintah Kota Yogyakarta
+    base_url: https://hargapangan.jogjakota.go.id/
+    robots_url: https://hargapangan.jogjakota.go.id/robots.txt
+    scope: city
+    cadence: daily
+    regions: [kota_yogyakarta]
+    obs_date_convention: null
+    is_active: true
+    notes: >-
+      Kota Yogyakarta municipal market prices. The most local source, and the
+      only one covering kota_yogyakarta — single-source coverage there triggers
+      the fusion downgrade rule (§6.5) rather than a merah alert.
+
+  - slug: trends
+    display_name: Google Trends (via pytrends)
+    owner: Google — accessed through the unofficial `pytrends` wrapper
+    base_url: https://trends.google.com/
+    robots_url: https://trends.google.com/robots.txt
+    scope: national+provincial
+    cadence: weekly
+    regions: [nasional, di_yogyakarta]
+    obs_date_convention: week_start_sunday
+    is_active: true
+    notes: >-
+      Demand-proxy signal only, never a price source. Unofficial wrapper around
+      an undocumented endpoint: 429s are routine. Cached aggressively to disk,
+      exponential backoff on throttle, and failures recorded in fetch_failures.
+      When unavailable the fusion D component degrades to 0 with a recorded
+      reason rather than failing the whole run.

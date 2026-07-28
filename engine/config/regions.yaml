@@ -1,0 +1,47 @@
+# Reference data: geographic scopes tracked by SIAP-PANGAN.
+# Seeded into the `regions` table by `siap seed`.
+#
+# Slug convention note: region slugs use underscores while commodity slugs use
+# hyphens. That is the convention the build brief specifies (§4 lists
+# `di_yogyakarta`; §8.3 routes `/komoditas/cabai-rawit-merah`). It is preserved
+# deliberately rather than "corrected" — commodity slugs appear in public URLs,
+# region slugs do not. Recorded in docs/changelog.md.
+#
+#   level        national | province | city
+#   parent_slug  containing region, for roll-up display and coverage reporting
+#   bps_code     Badan Pusat Statistik area code, for cross-referencing official
+#                releases when annotators verify ground-truth evidence (M7)
+
+version: 1
+updated: 2026-07-28
+
+regions:
+  - slug: nasional
+    display_name: Nasional
+    level: national
+    parent_slug: null
+    bps_code: "0000"
+
+  - slug: jawa_tengah
+    display_name: Jawa Tengah
+    level: province
+    parent_slug: nasional
+    bps_code: "33"
+
+  - slug: di_yogyakarta
+    display_name: DI Yogyakarta
+    level: province
+    parent_slug: nasional
+    bps_code: "34"
+
+  - slug: jawa_timur
+    display_name: Jawa Timur
+    level: province
+    parent_slug: nasional
+    bps_code: "35"
+
+  - slug: kota_yogyakarta
+    display_name: Kota Yogyakarta
+    level: city
+    parent_slug: di_yogyakarta
+    bps_code: "3471"
