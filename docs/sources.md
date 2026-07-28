@@ -236,6 +236,29 @@ decisively; Daging Ayam reads 36,250 for id 15 and 24,000 for id 26, matching
 DI Yogyakarta and Sulawesi Selatan. Confusing the two would have silently
 filled a Javanese region with Sulawesi prices.
 
+### PIHPS publishes on weekdays only
+
+Measured across the full three-year backfill:
+
+| source | Sun | Mon | Tue | Wed | Thu | Fri | Sat |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| pihps | **0** | 157 | 157 | 156 | 156 | 156 | **0** |
+| siskaperbapo | 56 | 57 | 55 | 55 | 55 | 56 | 56 |
+
+Every one of PIHPS's 156 gaps is exactly two days long — the weekend. **This is
+structural, not failure**, and matters in two places:
+
+* The coverage report shows roughly 29% of days "missing" for PIHPS. That is
+  2/7, and it should not be read as a broken scraper.
+* In M2, a two-day weekend gap falls inside the brief's "interpolation permitted
+  for gaps ≤ 3 days" rule. Filling it is defensible — the markets themselves
+  trade at the weekend, PIHPS simply does not survey then — but the rows must
+  still be flagged `is_imputed = true` and excluded from ground-truth
+  evaluation, exactly as the schema requires.
+
+siskaperbapo publishes all seven days, so a weekend gap there really would be a
+failure.
+
 ### Two source-specific hazards
 
 1. **Number format is the opposite of siskaperbapo's.** PIHPS writes `"16,200"`
