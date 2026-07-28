@@ -167,6 +167,18 @@ class SourceConfig(_Strict):
     cadence: Literal["daily", "weekly"]
     regions: list[str] = Field(min_length=1)
     obs_date_convention: str | None = None
+
+    # Thousands/decimal convention this portal uses in text output.
+    #   id -> "12.508"  is twelve thousand five hundred and eight (siskaperbapo)
+    #   en -> "16,200"  is sixteen thousand two hundred            (pihps)
+    # The two are mutually unparseable, and guessing wrong is a 1000x error, so
+    # it is declared per source rather than sniffed.
+    number_format: Literal["id", "en"] = "id"
+
+    # Unit to assume when the portal publishes prices without one. Sources that
+    # label every row (siskaperbapo) leave this null.
+    default_unit: str | None = None
+
     is_active: bool = True
     notes: str | None = None
 

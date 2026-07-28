@@ -159,24 +159,98 @@ outcome — including "we left it at 0.91" — goes in `docs/methods.md`.
 Until then the conversion is recorded per row in `price_observations.unit_factor`,
 so any later correction can be applied retroactively without re-scraping.
 
-## pihps — Bank Indonesia ✅ viable
+## pihps — Bank Indonesia ✅ implemented
 
-**Table pages**, one per price level and pivot:
+**Data endpoint**, taking a **date range**, which makes backfill cheap:
 
 ```
-/hargapangan/TabelHarga/PasarTradisionalDaerah      <- consumer level, by region
-/hargapangan/TabelHarga/PasarTradisionalKomoditas
-/hargapangan/TabelHarga/PasarModernDaerah
-/hargapangan/TabelHarga/PedagangBesarDaerah
-/hargapangan/TabelHarga/ProdusenDaerah
+GET /hargapangan/WebSite/TabelHarga/GetGridDataDaerah
+    ?price_type_id=1     1 = pasar tradisional (consumer level)
+    &comcat_id=          empty = all commodity groups
+    &province_id={id}    BI's own numbering, see below
+    &regency_id=&market_id=   empty = province-wide average
+    &tipe_laporan=1      1 = laporan harian
+    &start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
 ```
 
-`PasarTradisionalDaerah` is the correct one for this project: traditional
-market, consumer level.
+Returns a **pivoted** grid — one row per commodity, one column per date:
 
-**Data endpoint.** The page loads its grid from
-`GET /hargapangan/WebSite/TabelHarga/GetGridDataDaerah` (DevExtreme data
-source). Parameters not yet mapped.
+```json
+{"data": [{"no":"I","name":"Beras","level":1,"27/07/2026":"16,200"},
+          {"no":1,"name":"Beras Kualitas Medium I","level":2,"27/07/2026":"16,400"}]}
+```
+
+`level: 1` rows are group headings and must be skipped or the group is
+double-counted. `"-"` means not reported that day.
+
+**Archive depth: 3 years verified** (2023-07-24 returns populated data).
+
+Companion endpoint `GetGridDataKomoditas?comcat_id={n}` pivots the other way,
+one commodity across all provinces. `comcat_id`: 1 Beras, 2 Daging Ayam,
+3 Daging Sapi, 4 Telur Ayam, 5 Bawang Merah, 6 Bawang Putih, 7 Cabai Merah,
+8 Cabai Rawit, 9 Minyak Goreng, 10 Gula Pasir.
+
+### province_id is BI's own numbering, not BPS
+
+| region | `province_id` |
+|---|---|
+| `jawa_tengah` | 14 |
+| `di_yogyakarta` | **15** |
+| `jawa_timur` | 16 |
+
+Established empirically by cross-matching the by-province grid against the
+by-commodity grid, which carries province names. **15 required disambiguation
+from 26** — both tie at Beras = 14,400. Nine other commodities separate them
+decisively; Daging Ayam reads 36,250 for id 15 and 24,000 for id 26, matching
+DI Yogyakarta and Sulawesi Selatan. Confusing the two would have silently
+filled a Javanese region with Sulawesi prices.
+
+### Two source-specific hazards
+
+1. **Number format is the opposite of siskaperbapo's.** PIHPS writes `"16,200"`
+   for sixteen thousand two hundred; siskaperbapo writes `"12.508"` for twelve
+   thousand five hundred and eight. The same string is valid under both
+   conventions and means different things, so `number_format` is declared per
+   source in sources.yaml and never sniffed.
+2. **No unit field at all.** Declared `default_unit: kg`, inferred rather than
+   known — see below.
+
+### Inference: PIHPS prices are per kilogram
+
+PIHPS publishes no unit. Compared against siskaperbapo for the same region and
+day (`jawa_timur`, 2026-07-27):
+
+| commodity | PIHPS | siskaperbapo | gap |
+|---|---:|---:|---:|
+| gula pasir | 17,150 | 17,166 **/kg** | **0.1%** |
+| telur ayam ras | 25,100 | 25,041 /kg | 0.2% |
+
+A 0.1% agreement on gula pasir establishes the kg basis for weight goods.
+Cooking oil is treated the same way, and the result corroborates it: PIHPS
+curah reads 21,050/kg, which at the configured 0.91 kg/L becomes **19,156/litre**
+against SP2KP's **19,199/litre** published natively — a 0.2% gap.
+
+That is encouraging for both the kg assumption and the density constant, but it
+is still one day. Confirmed or corrected in M2.
+
+### Cross-source spreads are definitional, not bugs
+
+Three-way comparison at 2026-07-27 shows PIHPS running systematically higher
+than SP2KP, most sharply in DI Yogyakarta (bawang merah +23%, bawang putih
++24%). This is **not** a unit error — a unit error appears as a factor of 10 or
+of 0.91, not as a scattered 5–24%.
+
+The cause is methodological: PIHPS surveys a small panel of traditional markets
+concentrated in provincial capitals, while SP2KP averages many markets across
+the whole province. Definitional differences compound it — PIHPS
+"Beras Kualitas Medium I" is a different quality tier from SP2KP "Beras
+Medium", and PIHPS "Daging Sapi Kualitas 1" is a different cut from
+"Daging Sapi Paha Belakang".
+
+`price_daily_unified` takes the **median** across sources precisely so one
+higher-priced panel cannot drag the series, and records `source_spread_pct` so
+the disagreement stays visible rather than being averaged away. M2's gate
+inspects the ten largest disagreements for exactly this reason.
 
 ---
 

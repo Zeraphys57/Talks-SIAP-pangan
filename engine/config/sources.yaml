@@ -81,14 +81,27 @@ sources:
     base_url: https://www.bi.go.id/hargapangan
     robots_url: https://www.bi.go.id/robots.txt
     scope: provincial
-    cadence: weekly
+    cadence: daily
     regions: [jawa_tengah, di_yogyakarta, jawa_timur]
-    obs_date_convention: null
+    obs_date_convention: same_day_wib
+    # PIHPS renders "16,200" for sixteen thousand two hundred — the OPPOSITE
+    # convention to siskaperbapo's "12.508". Declared, never sniffed.
+    number_format: en
+    # PIHPS publishes no unit field at all. Inferred as kg from a same-region,
+    # same-day comparison: gula pasir reads 17,150 against siskaperbapo's
+    # 17,166/kg, a 0.1% gap. Cooking oil is therefore also treated as kg, which
+    # sits 3.6% from siskaperbapo's kg figure versus 9.6% from SP2KP's native
+    # litre figure. This is an inference; M2's cross-source disagreement report
+    # is where it gets confirmed or corrected. See docs/sources.md.
+    default_unit: kg
     is_active: true
     notes: >-
-      Bank Indonesia survey of traditional and modern markets. Roughly weekly
-      cadence, so it contributes fewer rows than the daily portals and must not
-      be expected to corroborate every daily observation.
+      Bank Indonesia survey of traditional markets, consumer level. Data via
+      GET /hargapangan/WebSite/TabelHarga/GetGridDataDaerah with a date range,
+      which makes backfill cheap. Archive verified back 3 years. province_id
+      is BI's own numbering, not BPS: 14=Jawa Tengah, 15=DI Yogyakarta,
+      16=Jawa Timur, confirmed empirically. Reported as weekly in the proposal
+      but the grid returns daily columns.
 
   - slug: siskaperbapo
     display_name: SISKAPERBAPO — Sistem Informasi Ketersediaan dan Perkembangan Harga Bahan Pokok

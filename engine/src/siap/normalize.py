@@ -43,46 +43,51 @@ class NormalizationError(ValueError):
 _CURRENCY_STRIP = re.compile(r"(?i)\b(rp|idr)\b|[^\d.,\-]")
 
 
-def parse_indonesian_number(text: str | float | int) -> float:
-    """Parse an Indonesian-formatted price string.
+def parse_price(text: str | float | int, *, style: str = "id") -> float:
+    """Parse a price string under a declared thousands/decimal convention.
 
-    Indonesian uses '.' as the thousands separator and ',' as the decimal mark,
-    the reverse of English. `float("12.508")` silently yields 12.508 instead of
-    12508 — a 1000x error that would present as a spectacular anomaly.
+    The two conventions in play here are mutually unparseable:
 
-        "12.508"      -> 12508.0
-        "Rp 116.461"  -> 116461.0
-        "12.508,50"   -> 12508.5
-        "38,330"      -> 38.33     (comma is a decimal mark, not a separator)
+        id  "12.508"  -> 12508.0     '.' groups thousands, ',' is decimal
+        en  "16,200"  -> 16200.0     ',' groups thousands, '.' is decimal
+
+    `"16,200"` is a valid number in both and means different things, so the
+    style comes from `sources.yaml` rather than from a heuristic. Guessing wrong
+    is a 1000x error that would present as a spectacular anomaly.
     """
     if isinstance(text, (int, float)):
         return float(text)
 
     cleaned = _CURRENCY_STRIP.sub("", str(text)).strip()
     # "Rp. 141.940" leaves a leading separator once the currency word is gone.
-    # Strip separators that cannot be part of a number at either end.
     cleaned = cleaned.strip(".,")
     if not cleaned or not any(ch.isdigit() for ch in cleaned):
         raise NormalizationError(f"no numeric content in {text!r}")
 
-    has_dot, has_comma = "." in cleaned, "," in cleaned
-    if has_dot and has_comma:
-        # Whichever appears last is the decimal mark.
-        if cleaned.rfind(",") > cleaned.rfind("."):
-            cleaned = cleaned.replace(".", "").replace(",", ".")
+    thousands, decimal = (".", ",") if style == "id" else (",", ".")
+    has_thousands, has_decimal = thousands in cleaned, decimal in cleaned
+
+    if has_thousands and has_decimal:
+        cleaned = cleaned.replace(thousands, "").replace(decimal, ".")
+    elif has_thousands:
+        # Only a separator if it groups digits in threes; otherwise it is a
+        # decimal point written in the other convention, e.g. a stray "0.91".
+        if re.fullmatch(rf"-?\d{{1,3}}(\{thousands}\d{{3}})+", cleaned):
+            cleaned = cleaned.replace(thousands, "")
         else:
-            cleaned = cleaned.replace(",", "")
-    elif has_dot:
-        # '.' is a thousands separator when it groups digits in threes.
-        if re.fullmatch(r"-?\d{1,3}(\.\d{3})+", cleaned):
-            cleaned = cleaned.replace(".", "")
-    elif has_comma:
-        cleaned = cleaned.replace(",", ".")
+            cleaned = cleaned.replace(thousands, ".")
+    elif has_decimal:
+        cleaned = cleaned.replace(decimal, ".")
 
     try:
         return float(cleaned)
     except ValueError as exc:
         raise NormalizationError(f"cannot parse {text!r} as a number") from exc
+
+
+def parse_indonesian_number(text: str | float | int) -> float:
+    """Indonesian-convention shorthand for `parse_price(..., style="id")`."""
+    return parse_price(text, style="id")
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +167,7 @@ class Normalizer:
             raise NormalizationError(f"untracked commodity {raw.commodity_name_raw!r}")
 
         commodity = self.reference.commodity(commodity_slug)
+        source = self.reference.source(raw.source_slug)
 
         raw_token = self.units.canonical_token(raw.unit_raw)
         if raw.unit_raw is not None and raw_token is None:
@@ -169,10 +175,10 @@ class Normalizer:
                 f"unrecognised unit {raw.unit_raw!r} for {commodity_slug}; "
                 f"add it to units.yaml rather than assuming kilograms"
             )
-        # A source that publishes no unit at all is trusted to already be
-        # canonical, which is true for the JSON APIs where the unit is a
-        # property of the variant rather than the row.
-        from_unit = raw_token or commodity.canonical_unit
+        # When a portal publishes no unit at all, fall back to the unit declared
+        # for that source in sources.yaml. Only if the source declares none do we
+        # treat the price as already canonical.
+        from_unit = raw_token or source.default_unit or commodity.canonical_unit
 
         factor = self.units.factor_for(from_unit, commodity.canonical_unit, commodity_slug)
         if factor is None:
@@ -181,7 +187,7 @@ class Normalizer:
                 f"{commodity.canonical_unit!r} for {commodity_slug}"
             )
 
-        price = parse_indonesian_number(raw.price_raw) * factor
+        price = parse_price(raw.price_raw, style=source.number_format) * factor
 
         band = commodity.plausible_price
         if not (band.min <= price <= band.max):

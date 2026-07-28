@@ -10,8 +10,8 @@ from datetime import date
 
 import pytest
 
-from siap.config import load_units
-from siap.normalize import NormalizationError, parse_indonesian_number
+from siap.config import load_reference, load_units
+from siap.normalize import NormalizationError, parse_indonesian_number, parse_price
 from siap.scrapers.base import RawObservation
 
 
@@ -59,6 +59,49 @@ def test_unparseable_text_raises_rather_than_returning_zero() -> None:
         parse_indonesian_number("tidak ada data")
     with pytest.raises(NormalizationError):
         parse_indonesian_number("")
+
+
+# ---------------------------------------------------------------------------
+# The two conventions are mutually unparseable
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # Real strings from the PIHPS grid.
+        ("16,200", 16200.0),
+        ("14,750", 14750.0),
+        ("147,450", 147450.0),
+        ("16,200.50", 16200.50),
+        ("20,500", 20500.0),
+    ],
+)
+def test_parse_price_en_convention(text: str, expected: float) -> None:
+    assert parse_price(text, style="en") == pytest.approx(expected)
+
+
+def test_the_same_string_means_different_things_in_each_convention() -> None:
+    """Why the style is declared in sources.yaml rather than sniffed.
+
+    "16,200" is valid under both conventions and means sixteen thousand two
+    hundred to PIHPS but sixteen-point-two to siskaperbapo. No heuristic can
+    tell them apart, and guessing wrong is a 1000x error.
+    """
+    assert parse_price("16,200", style="en") == 16200.0
+    assert parse_price("16,200", style="id") == pytest.approx(16.2)
+
+
+def test_each_live_source_declares_a_number_format() -> None:
+    """A source added without declaring its convention would silently use 'id'."""
+    reference = load_reference()
+    assert reference.source("pihps").number_format == "en"
+    assert reference.source("siskaperbapo").number_format == "id"
+
+
+def test_pihps_declares_the_unit_it_does_not_publish() -> None:
+    """PIHPS emits no unit field; the assumption must live somewhere explicit."""
+    assert load_reference().source("pihps").default_unit == "kg"
+    # siskaperbapo labels every row, so it must NOT carry a blanket assumption.
+    assert load_reference().source("siskaperbapo").default_unit is None
 
 
 # ---------------------------------------------------------------------------

@@ -18,6 +18,7 @@ from .db import Conn
 from .normalize import Normalizer
 from .runs import Run, start_run
 from .scrapers.base import BaseScraper, FetchError, PoliteClient
+from .scrapers.pihps import PihpsScraper
 from .scrapers.siskaperbapo import SiskaperbapoScraper
 from .scrapers.sp2kp import Sp2kpScraper
 from .settings import contact_email
@@ -29,6 +30,7 @@ log = logging.getLogger(__name__)
 SCRAPERS: dict[str, type[BaseScraper]] = {
     "sp2kp": Sp2kpScraper,
     "siskaperbapo": SiskaperbapoScraper,
+    "pihps": PihpsScraper,
 }
 
 
