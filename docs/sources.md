@@ -11,25 +11,56 @@ delay, and one connection at a time.
 
 | slug | status | mechanism | archive depth |
 |---|---|---|---|
-| `sp2kp` | ✅ **confirmed working** | clean unauthenticated JSON API | **2024-02-01 → today (~130 wk)** |
-| `siskaperbapo` | ✅ **confirmed working** | `POST /harga/tabel.nodesign/` | **3 years verified** |
-| `pihps` | ✅ viable | `GET /hargapangan/WebSite/TabelHarga/GetGridDataDaerah` | not yet measured |
-| `jogja` | ⚠️ needs session handling | Laravel + CSRF token (bare POST → HTTP 419) | not yet measured |
-| `panelharga` | ❌ **blocked — upstream outage** | its own frontend is broken; see below | unknown |
-| `trends` | not yet attempted | pytrends | n/a |
+| `pihps` | ✅ **implemented** | `GetGridDataDaerah`, date range | **3 years verified** |
+| `siskaperbapo` | ✅ **implemented** | `POST /harga/tabel.nodesign/` | **3 years verified** |
+| `sp2kp` | ✅ **implemented** | unauthenticated JSON API | **2024-02-01 → today (~130 wk)** |
+| `jogja` | ✅ implemented, **forward-only** | Laravel + DataTables (GET) | **none — no archive endpoint** |
+| `panelharga` | ❌ **disabled — upstream outage** | its own frontend is broken | n/a |
+| `trends` | ✅ implemented, best-effort | pytrends (unofficial) | up to 5 years |
 
 ### Resulting region coverage
 
-| region | sources | fusion `C` viable? |
-|---|---|---|
-| `nasional` | sp2kp | single source → capped at kuning |
-| `jawa_tengah` | sp2kp + pihps | yes |
-| `di_yogyakarta` | sp2kp + pihps | yes |
-| `jawa_timur` | sp2kp + pihps + siskaperbapo | yes, strongest |
-| `kota_yogyakarta` | jogja | single source → capped at kuning |
+| region | price sources | fusion `C` viable? | M5 STL viable? |
+|---|---|---|---|
+| `nasional` | sp2kp | single source → capped at kuning | yes |
+| `jawa_tengah` | sp2kp + pihps | yes | **yes, 157 wk** |
+| `di_yogyakarta` | sp2kp + pihps | yes | **yes, 157 wk** |
+| `jawa_timur` | sp2kp + pihps + siskaperbapo | yes, strongest | **yes, 158 wk** |
+| `kota_yogyakarta` | jogja | single source → capped at kuning | **no — no archive** |
 
-Panel Harga being unavailable costs redundancy but does not remove any region,
-because SP2KP's `province-comparison` endpoint returns all 37 provinces.
+Panel Harga being unavailable costs redundancy but removes no region, because
+SP2KP's `province-comparison` endpoint returns all 37 provinces.
+
+The 104-week STL threshold is cleared in four of five regions. Only
+`kota_yogyakarta` cannot support seasonality, because its portal exposes no
+historical endpoint at all.
+
+## trends — Google Trends via pytrends ✅ best-effort
+
+Not a price source; fills `demand_signals`, which supplies the fusion `D` term.
+
+`pytrends` is an **unofficial** community wrapper around an undocumented
+endpoint, and Google rate-limits it aggressively — HTTP 429 is routine, not
+exceptional. Treated accordingly:
+
+* failures write `fetch_failures` and leave the signal absent, so `D` degrades
+  to 0 with a recorded reason rather than failing the run;
+* responses cache to disk for a week under `engine/.cache/trends/`, because the
+  source itself only updates weekly;
+* only the first keyword per commodity is requested — each extra term multiplies
+  the chance of being cut off mid-run.
+
+Geo codes: `nasional` → `ID`, `di_yogyakarta` → `ID-YO`.
+
+`interest` is Google's 0–100 index, normalised *within the requested window* and
+therefore not comparable across requests. `interest_z52`, the z-score against a
+trailing 52-week baseline, is what fusion consumes. The baseline is **trailing
+only** — it ends at the week before the one being scored. Including the current
+week would let a spike partly cancel itself, damping the signal exactly when it
+matters, the same leak the price Z-Score module avoids.
+
+Weekly data stays weekly. It is forward-filled at join time in M2, never
+interpolated into a daily curve the source cannot support.
 
 ## robots.txt
 
@@ -254,16 +285,87 @@ inspects the ten largest disagreements for exactly this reason.
 
 ---
 
-## jogja — Pemkot Yogyakarta ⚠️
+## jogja — Pemkot Yogyakarta ✅ implemented, forward-only
 
-Laravel application. A bare `POST /harga_pangan` returns **HTTP 419 (Page
-Expired)**, which is Laravel's CSRF rejection. Ingestion therefore needs a
-session: fetch the page, read the `csrf-token` meta tag and the `XSRF-TOKEN`
-cookie, then post with both. Standard, but it makes this scraper stateful in a
-way the others are not.
+Laravel application with a DataTables front end. The initial `POST` returning
+419 was a red herring — DataTables issues **GET**, not POST.
 
-Other endpoints seen: `/harga_pangan/perubahan_hari_ini`, `/statistik`.
-`/datapasar` returns 404 from outside the app context.
+```
+GET /harga_pangan?draw=1&start=0&length=200&id_pasar={n}
+    with X-Requested-With: XMLHttpRequest
+GET /datapasar        market list  (Beringharjo id 1, Prawirotaman id 8)
+GET /datakomoditas    commodity list (50 items)
+```
+
+A session cookie must exist first, so the page is requested before the data.
+
+### The WAF blocks our institution's name
+
+`hargapangan.jogjakota.go.id` runs openresty and returned **403 to any request
+whose User-Agent contained the word "Yogyakarta"**. Established by bisection on
+2026-07-29:
+
+| User-Agent | result |
+|---|---|
+| `SIAP-PANGAN/0.1 (Universitas Atma Jaya Yogyakarta academic research; contact: …)` | **403** |
+| `Yogyakarta` | **403** |
+| `Universitas` / `Atma` / `Jaya` (each alone) | 200 |
+| *no User-Agent at all* | 200 |
+| `python-httpx/0.28` | 200 |
+
+So this is not bot-blocking — an anonymous request succeeds. It is most likely
+an anti-impersonation rule aimed at crawlers claiming to be the city
+government.
+
+**Resolved by shortening the institution to `UAJY`**, its own standard
+abbreviation (`uajy.ac.id`). The User-Agent still names the project, the
+institution, the purpose and a reachable contact, so the conduct requirement is
+met in full. We did **not** present ourselves as a browser or as an anonymous
+client to get past the block — that would be evasion, and this project scrapes
+government portals.
+
+### The `satuan` field is wrong; the name is authoritative
+
+Every row reports `komoditas.satuan.nama_satuan = "Kg"`, including products the
+same API names `Minyak Goreng Curah,1 lt` and `Minyakita,1 lt`.
+
+Cross-source evidence settles it decisively:
+
+| source | region | Rp per litre | how |
+|---|---|---:|---|
+| jogja | kota_yogyakarta | **18,650** | name suffix `1 lt`, no conversion |
+| pihps | di_yogyakarta | **18,655** | no unit field, assumed kg, ×0.91 |
+| sp2kp | di_yogyakarta | 19,730 | published natively in `lt` |
+
+jogja and PIHPS agree to **0.03%** by two entirely independent inference paths.
+Trusting `satuan` and converting would have produced ~16,972, about 9% below
+every neighbour. The scraper therefore reads the unit from the name suffix and
+ignores `satuan`, with a regression test pinning it.
+
+### Forward-only: no archive
+
+The daily endpoint returns only the latest verified snapshot — every row carries
+the same `tgl_harga_pangan`. History sits behind `POST /statistik`, which is a
+**market comparison** view; every parameter shape tried (`id_pasar` scalar,
+`id_pasar[]` array, CSV, `id_komoditas[]`) returns
+
+```json
+{"status":false,"message":"Silakan pilih pasar lainnya yang ingin dikomparasikan!"}
+```
+
+Not pursued further. Consequences, recorded rather than worked around:
+
+* `kota_yogyakarta` accumulates forward from first run and has **no archive**.
+* M5's STL needs ≥104 weeks and therefore **cannot cover kota_yogyakarta**.
+* The DIY *province* is unaffected — SP2KP and PIHPS both carry three years for
+  `di_yogyakarta`. Only the city-level series is short.
+
+### Several markets per day
+
+Beringharjo and Prawirotaman both report, but `price_observations` is unique per
+(commodity, source, region, date). Prices are reduced to a **median across
+markets** — the city-level figure, the same shape as siskaperbapo's provincial
+average. Contributing markets are recorded in `extra`.
 
 ---
 

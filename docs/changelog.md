@@ -6,6 +6,116 @@ reason, so they can be defended rather than discovered.
 
 ---
 
+## M1 — Ingestion and historical backfill (2026-07-28 → 29)
+
+Reconnaissance came first, per the brief's instruction to verify every URL live
+before writing a scraper. Full findings in [`docs/sources.md`](sources.md); the
+decisions and surprises are recorded here.
+
+### Outcome per source
+
+| source | result |
+|---|---|
+| `pihps` | implemented, **3-year archive**, date-range endpoint |
+| `siskaperbapo` | implemented, **3-year archive** |
+| `sp2kp` | implemented, archive to 2024-02-01 (~130 wk) |
+| `jogja` | implemented, **forward-only — no archive exists** |
+| `panelharga` | **disabled**, upstream outage |
+| `trends` | implemented, currently throttled by Google (429) |
+
+**M5's STL dependency is satisfied**: 157–158 weeks covered for `jawa_tengah`,
+`di_yogyakarta` and `jawa_timur`, against a 104-week requirement. Only
+`kota_yogyakarta` cannot support seasonality, because its portal exposes no
+historical endpoint at all.
+
+### Two judgement calls that changed the plan
+
+**Panel Harga is disabled, and its admin endpoints were left alone.** Its API
+returns 401 to the key embedded in its own deployed bundle. A browser session
+confirmed the portal itself is broken — blank page, then a crash mapping over
+the error object. The bundle also exposes 168 `/cms/*` administrative paths, one
+of which answers anonymously. They were not probed. Harvesting a government
+system's back-office is not data this project is entitled to, and it would
+poison the provenance story the whole project rests on. The correct route, if
+Panel Harga is wanted, is a written request to Bapanas.
+
+**The User-Agent now says "UAJY" rather than the university's full name.**
+`hargapangan.jogjakota.go.id` returns 403 to any User-Agent containing the word
+"Yogyakarta" — verified by bisection; an *anonymous* request succeeds, so this
+is not bot-blocking but most likely an anti-impersonation rule. Shortening to
+the institution's own standard abbreviation keeps the identification truthful
+while clearing the filter. Presenting ourselves as a browser, or dropping the
+User-Agent entirely, would have worked too and was rejected: both are evasion.
+
+### Traps from §10, all confirmed live
+
+1. **Three different number conventions.** siskaperbapo writes `"12.508"` for
+   twelve thousand five hundred and eight; PIHPS writes `"16,200"` for sixteen
+   thousand two hundred; SP2KP and jogja return JSON numbers. `"16,200"` is
+   valid under both text conventions and means different things, so
+   `number_format` is declared per source and never sniffed.
+2. **Unit chaos, in three distinct flavours.** siskaperbapo publishes cooking
+   oil per **kg** while our canonical unit is the litre; PIHPS publishes **no
+   unit field at all**; jogja's `satuan` field is **wrong**, reporting "Kg" for
+   products it names "…,1 lt". All three resolved through configuration
+   (`units.yaml`, `default_unit`) rather than in scraper bodies.
+3. **Commodity name drift.** Every provisional alias for siskaperbapo and jogja
+   was wrong. `daging-sapi` is `Daging Sapi Paha Belakang`, not "Daging Sapi
+   Murni"; gula is `Gula Kristal Putih`; jogja names rice by brand
+   (`Beras Cap IR 64 (Medium)`). All reconciled against live responses.
+
+### The unit inferences cross-validated each other
+
+Cooking oil ended up as an unintended three-way check. For DI Yogyakarta on
+2026-07-28:
+
+| source | Rp/litre | how it was derived |
+|---|---:|---|
+| jogja | 18,650 | name suffix `1 lt`, taken at face value |
+| pihps | 18,655 | no unit field, inferred kg, converted ×0.91 |
+| sp2kp | 19,730 | published natively in litres |
+
+jogja and PIHPS agree to **0.03%** through completely independent inference
+paths. Had jogja's `satuan` been trusted, it would have read ~16,972 — 9% below
+both neighbours.
+
+### Open questions carried into M2
+
+* **The 0.91 kg/L density constant.** siskaperbapo's per-kg oil implies 0.9446
+  against SP2KP's native litre price, while PIHPS implies ~0.91. One day cannot
+  separate a systematic constant error from between-market variation; hundreds
+  of days can. `unit_factor` is stored per row, so a correction applies
+  retroactively without re-scraping.
+* **PIHPS runs systematically high**, up to +24% in DI Yogyakarta. Not a unit
+  error — those appear as ×10 or ×0.91, not a scattered 5–24%. It reflects a
+  small panel concentrated in provincial capitals plus differing quality tiers
+  (`Beras Kualitas Medium I` ≠ `Beras Medium`). The median in
+  `price_daily_unified` is the designed mitigation; M2's gate inspects it.
+* **One-to-many variant mapping.** SP2KP publishes four beef cuts, two garlics,
+  three oils. The rule adopted is "first listed alias present in the response
+  wins", with the alternatives recorded in the run notes. Whether averaging
+  would be better is an M2 question.
+
+### Deviations from the build brief
+
+| # | Brief says | Built as | Why |
+|---|---|---|---|
+| 11 | scrapers for all four price portals | four implemented, one disabled | panelharga's API is down upstream; reported rather than worked around |
+| 12 | 3-year backfill per source | 3 years for pihps/siskaperbapo, ~2.5 for sp2kp, none for jogja | those are the archives that exist; jogja has no historical endpoint |
+| 13 | — | `config/units.yaml` added | unit chaos is a named trap and deserves a reviewable table, not constants in code |
+| 14 | — | `number_format`, `default_unit` per source | forced by three portals disagreeing on both |
+| 15 | — | `siap coverage` command | the M1 gate needs coverage plus provenance samples in one place |
+
+### Environment note: httpx and the CA bundle
+
+httpx verifies against its bundled certifi and ignores `SSL_CERT_FILE`, which
+Python's own `ssl` module honours. Behind this machine's TLS-intercepting
+antivirus that meant urllib worked and httpx did not. `PoliteClient` now builds
+its SSL context from `SSL_CERT_FILE` / `REQUESTS_CA_BUNDLE` when present.
+Verification is never disabled.
+
+---
+
 ## M0 — Foundation (2026-07-28)
 
 Repo scaffold, database schema, reference data, connection layer, CLI, tests, CI.
