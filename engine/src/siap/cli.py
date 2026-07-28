@@ -374,5 +374,59 @@ def coverage_cmd(samples: int, seed: int | None, detail: bool) -> None:
         click.echo("  (none)")
 
 
+@cli.command("runs")
+@click.option("--limit", default=15, show_default=True, help="How many runs to list.")
+@click.option(
+    "--close-stale",
+    type=float,
+    default=None,
+    metavar="HOURS",
+    help="Mark runs still 'running' after HOURS as failed. Never marks them succeeded.",
+)
+def runs_cmd(limit: int, close_stale: float | None) -> None:
+    """List analysis runs, and optionally reconcile abandoned ones.
+
+    A process killed mid-run leaves its row at 'running' forever. Left alone
+    those rows make "which runs actually completed?" unanswerable, which the
+    reproducibility claim in M9 depends on.
+    """
+    from .runs import close_stale as close_stale_runs
+    from .runs import list_runs
+
+    try:
+        with connect() as conn:
+            if close_stale is not None:
+                closed = close_stale_runs(conn, close_stale)
+                if closed:
+                    click.echo(
+                        click.style(
+                            f"  marked {len(closed)} abandoned run(s) as failed: {closed}",
+                            fg="yellow",
+                        )
+                    )
+                else:
+                    click.echo("  no abandoned runs found")
+                click.echo()
+            rows = list_runs(conn, limit)
+    except (MissingSetting, DatabaseError, ConfigError) as exc:
+        _fatal(str(exc))
+        return
+
+    click.echo(f"  {'id':>5}  {'type':<10}{'status':<10}{'started':<10}{'git':<10}params")
+    for r in rows:
+        colour = {
+            "success": "green",
+            "running": "cyan",
+            "partial": "yellow",
+            "failed": "red",
+        }.get(str(r["status"]))
+        status = click.style(f"{r['status']:<10}", fg=colour) if colour else f"{r['status']:<10}"
+        sha = (str(r["git_sha"]) or "")[:8] if r["git_sha"] else "-"
+        click.echo(
+            f"  {int(r['id']):>5}  {r['run_type']:<10}{status}"
+            f"{r['started_at']:%H:%M:%S}  {sha:<10}{str(r['params'])[:70]}"
+        )
+
+
 if __name__ == "__main__":  # pragma: no cover
     cli()

@@ -105,6 +105,55 @@ class Run:
         self.conn.commit()
 
 
+def list_runs(conn: Conn, limit: int = 20) -> list[dict[str, Any]]:
+    from .db import fetch_all
+
+    return fetch_all(
+        conn,
+        """
+        select id, run_type, status, started_at, finished_at, git_sha,
+               params::text as params, left(coalesce(notes, ''), 200) as notes
+          from public.analysis_runs
+         order by id desc
+         limit %s
+        """,
+        (limit,),
+    )
+
+
+def close_stale(conn: Conn, older_than_hours: float = 6.0) -> list[int]:
+    """Mark abandoned runs as failed.
+
+    A process killed mid-run — Ctrl-C, a timed-out CI job, a laptop asleep —
+    leaves its row at `status='running'` forever. Left alone those rows quietly
+    accumulate and make "which runs actually completed?" unanswerable, which
+    matters directly for the reproducibility claim in M9.
+
+    They are marked `failed`, never `success`: the run genuinely did not finish,
+    and whatever it wrote is partial.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            update public.analysis_runs
+               set status = 'failed',
+                   finished_at = now(),
+                   notes = concat_ws(
+                       E'\\n', notes,
+                       'Marked failed by `siap runs --close-stale`: still running after '
+                       || %s || ' hour(s). The process did not finish, so any rows it '
+                       || 'wrote are partial.')
+             where status = 'running'
+               and started_at < now() - make_interval(hours => %s)
+            returning id
+            """,
+            (older_than_hours, older_than_hours),
+        )
+        closed = [int(r["id"]) for r in cur.fetchall()]
+    conn.commit()
+    return closed
+
+
 def start_run(
     conn: Conn,
     run_type: str,
