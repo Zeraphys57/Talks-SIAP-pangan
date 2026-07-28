@@ -413,11 +413,24 @@ a clean unauthenticated REST service on a separate host.
 Verified from plain Python with no cookies, no `Referer`, and our own
 User-Agent: HTTP 200 on every one of these.
 
-**Archive depth.** Requesting `history-series` for 2023-07-28 → 2026-07-28
-returns 617 points, the earliest being **2024-02-01**. That is roughly 130
-weeks, which clears the >= 104-week STL guard in M5. The series is not
-gap-free — 617 points across ~908 days — so `price_daily_unified` gap handling
+**Archive depth — and the two endpoints disagree.**
+
+| endpoint | earliest data |
+|---|---|
+| `hnt/history-series` (national) | **2024-02-01** |
+| `average-price/province-comparison` (provincial) | **~2024-03-01** |
+
+`history-series` for 2023-07-28 → 2026-07-28 returns 617 points from 2024-02-01,
+roughly 130 weeks — clearing the ≥104-week STL guard. The series is not
+gap-free (617 points across ~908 days), so `price_daily_unified` gap handling
 matters here.
+
+The **provincial** endpoint is shorter still. Probed on 2026-07-29, it returns
+`items: []` for 2023-08-01, 2023-11-01, 2024-01-15 and 2024-02-01, and its first
+populated response is 2024-03-01. Backfilling provincial data from 2023 would
+therefore mean roughly 2,600 requests to a government server that can only
+return nothing — so the provincial backfill starts at 2024-03-01. This is a
+politeness constraint as much as a speed one.
 
 **Response shape** (`province-comparison`):
 
