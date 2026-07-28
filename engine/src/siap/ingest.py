@@ -18,6 +18,7 @@ from .db import Conn
 from .normalize import Normalizer
 from .runs import Run, start_run
 from .scrapers.base import BaseScraper, FetchError, PoliteClient
+from .scrapers.jogja import JogjaScraper
 from .scrapers.pihps import PihpsScraper
 from .scrapers.siskaperbapo import SiskaperbapoScraper
 from .scrapers.sp2kp import Sp2kpScraper
@@ -31,6 +32,7 @@ SCRAPERS: dict[str, type[BaseScraper]] = {
     "sp2kp": Sp2kpScraper,
     "siskaperbapo": SiskaperbapoScraper,
     "pihps": PihpsScraper,
+    "jogja": JogjaScraper,
 }
 
 
@@ -160,10 +162,46 @@ def ingest_backfill(
                 run.note(f"no scraper implemented for {source_slug}")
                 return reports
 
-            # National history arrives as one range request per commodity, so it
-            # is fetched once rather than per day.
             scraper = scraper_cls(conn, client, run)
             normalizer = Normalizer(conn)
+
+            # Sources whose API accepts a date range are backfilled in one shot.
+            # PIHPS covers three years in three requests this way instead of
+            # 1,095 — the difference between seconds and hours of polite waiting.
+            if hasattr(scraper, "fetch_range"):
+                try:
+                    raws = scraper.fetch_range(start, end)
+                    result = normalizer.normalize_batch(raws)
+                    persisted = normalizer.persist(result.accepted)
+                    run.note(
+                        f"{source_slug}: range {start}..{end} -> {persisted} observation(s) "
+                        f"from {len(raws)} raw point(s)"
+                    )
+                    reports.append(
+                        DayReport(
+                            source_slug=f"{source_slug}:range",
+                            obs_date=end,
+                            raw_rows=len(raws),
+                            persisted=persisted,
+                            rejected=[
+                                f"{r.commodity_name_raw}: {w}" for r, w in result.rejected[:20]
+                            ],
+                            ignored_names=result.ignored_names,
+                        )
+                    )
+                except FetchError as exc:
+                    run.note(f"{source_slug}: range fetch failed: {exc}")
+                    reports.append(
+                        DayReport(
+                            source_slug=f"{source_slug}:range",
+                            obs_date=end,
+                            error=f"{exc.error_class}: {exc}",
+                        )
+                    )
+                return reports
+
+            # National history arrives as one range request per commodity, so it
+            # is fetched once rather than per day.
             if hasattr(scraper, "fetch_national_range"):
                 try:
                     national = scraper.fetch_national_range(start, end)

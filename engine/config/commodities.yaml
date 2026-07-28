@@ -53,7 +53,7 @@ commodities:
       sp2kp: ["Beras Medium"]
       siskaperbapo: ["Beras Medium"]
       pihps: ["Beras Kualitas Medium I", "Beras Kualitas Medium II"]
-      jogja: ["Beras Medium", "Beras IR I"]
+      jogja: ["Beras Cap IR 64 (Medium)", "Beras Cap C4 (Medium)"]
 
   - slug: beras-premium
     display_name: Beras premium
@@ -65,7 +65,7 @@ commodities:
       sp2kp: ["Beras Premium"]
       siskaperbapo: ["Beras Premium"]
       pihps: ["Beras Kualitas Super I", "Beras Kualitas Super II"]
-      jogja: ["Beras Premium", "Beras C4"]
+      jogja: ["Beras Cap DM Delanggu (Premium)", "Beras Cap mentik wangi (Premium)"]
 
   # Note the spelling split: SP2KP writes "Cabai", siskaperbapo writes "Cabe".
   # Both are listed explicitly rather than fuzzy-matched.
@@ -79,7 +79,7 @@ commodities:
       sp2kp: ["Cabai Merah Keriting"]
       siskaperbapo: ["Cabe Merah Keriting"]
       pihps: ["Cabai Merah Keriting"]
-      jogja: ["Cabai Merah Keriting", "Cabe Merah Keriting"]
+      jogja: ["Cabai Merah Keriting,1 kg"]
 
   - slug: cabai-rawit-merah
     display_name: Cabai rawit merah
@@ -91,7 +91,7 @@ commodities:
       sp2kp: ["Cabai Rawit Merah"]
       siskaperbapo: ["Cabe Rawit Merah"]
       pihps: ["Cabai Rawit Merah"]
-      jogja: ["Cabai Rawit Merah", "Cabe Rawit Merah", "Lombok Rawit Merah"]
+      jogja: ["Cabai Rawit Merah,1 kg"]
 
   - slug: bawang-merah
     display_name: Bawang merah
@@ -103,7 +103,7 @@ commodities:
       sp2kp: ["Bawang Merah"]
       siskaperbapo: ["Bawang Merah"]
       pihps: ["Bawang Merah Ukuran Sedang"]
-      jogja: ["Bawang Merah"]
+      jogja: ["Bawang Merah,1 kg"]
 
   # SP2KP carries Honan and Kating as separate variants; siskaperbapo merges
   # them into one row. Honan is canonical because both portals publish it.
@@ -117,7 +117,7 @@ commodities:
       sp2kp: ["Bawang Putih Honan", "Bawang Putih Kating"]
       siskaperbapo: ["Bawang Putih Sinco/Honan"]
       pihps: ["Bawang Putih Ukuran Sedang"]
-      jogja: ["Bawang Putih", "Bawang Putih Kating"]
+      jogja: ["Bawang Putih Honan,1 kg", "Bawang Putih Kating,1 kg"]
 
   - slug: telur-ayam-ras
     display_name: Telur ayam ras
@@ -129,7 +129,7 @@ commodities:
       sp2kp: ["Telur Ayam Ras"]
       siskaperbapo: ["Telur Ayam Ras"]
       pihps: ["Telur Ayam Ras Segar"]
-      jogja: ["Telur Ayam Ras", "Telur Ayam Negeri"]
+      jogja: ["Telur Ayam Ras,1 kg"]
 
   - slug: daging-ayam-ras
     display_name: Daging ayam ras
@@ -141,7 +141,7 @@ commodities:
       sp2kp: ["Daging Ayam Ras"]
       siskaperbapo: ["Daging Ayam Ras"]
       pihps: ["Daging Ayam Ras Segar"]
-      jogja: ["Daging Ayam Ras", "Daging Ayam Broiler"]
+      jogja: ["Daging Ayam Ras Karkas,1 kg"]
 
   # SP2KP publishes four cuts (Paha Belakang, Paha Depan, Tetelan, Sandung
   # Lamur). Paha Belakang is canonical: it is the cut siskaperbapo also
@@ -157,7 +157,7 @@ commodities:
       sp2kp: ["Daging Sapi Paha Belakang", "Daging Sapi Paha Depan"]
       siskaperbapo: ["Daging Sapi Paha Belakang"]
       pihps: ["Daging Sapi Kualitas 1", "Daging Sapi Kualitas 2"]
-      jogja: ["Daging Sapi", "Daging Sapi Murni"]
+      jogja: ["Daging Sapi Paha Belakang,1 kg"]
 
   # Canonical unit is LITRE. siskaperbapo publishes curah oil in **kg**, so a
   # density conversion applies there and is recorded per row in
@@ -172,7 +172,9 @@ commodities:
       sp2kp: ["Minyak Goreng Sawit Curah"]
       siskaperbapo: ["Minyak Goreng Curah"]
       pihps: ["Minyak Goreng Curah"]
-      jogja: ["Minyak Goreng Curah"]
+      # Published per LITRE here, despite the API's satuan field claiming "Kg".
+      # The name suffix is authoritative; see docs/sources.md.
+      jogja: ["Minyak Goreng Curah,1 lt"]
 
   # MINYAKITA is a government-subsidised brand at a controlled price, not a
   # free-market packaged oil, so it is a fallback rather than the canonical
@@ -188,7 +190,7 @@ commodities:
       siskaperbapo:
         ["Minyak Goreng Kemasan Premium", "Minyak Goreng Kemasan Sederhana", "Minyak Goreng MINYAKITA"]
       pihps: ["Minyak Goreng Kemasan Bermerk 1", "Minyak Goreng Kemasan Bermerk 2"]
-      jogja: ["Minyak Goreng Kemasan", "Minyak Goreng Bermerk"]
+      jogja: ["Minyak Goreng Kemasan Premium,1 lt", "Minyakita,1 lt"]
 
   - slug: gula-pasir
     display_name: Gula pasir
@@ -200,4 +202,4 @@ commodities:
       sp2kp: ["Gula Pasir Curah", "Gula Pasir Kemasan"]
       siskaperbapo: ["Gula Kristal Putih"]
       pihps: ["Gula Pasir Lokal", "Gula Pasir Kualitas Premium"]
-      jogja: ["Gula Pasir", "Gula Pasir Lokal"]
+      jogja: ["Gula Pasir Curah, 1kg", "Gula Pasir Kemasan, 1kg"]

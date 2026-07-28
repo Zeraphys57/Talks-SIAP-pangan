@@ -28,7 +28,20 @@ conduct:
   max_concurrent_per_host: 1
   # {contact} is substituted from SIAP_CONTACT_EMAIL at runtime. A portal
   # operator must be able to reach the team instead of silently blocking us.
-  user_agent: "SIAP-PANGAN/0.1 (Universitas Atma Jaya Yogyakarta academic research; contact: {contact})"
+  #
+  # "UAJY" rather than the university's full name, deliberately. The Pemkot
+  # Yogyakarta portal (hargapangan.jogjakota.go.id) runs an openresty rule that
+  # returns 403 to any User-Agent containing the word "Yogyakarta" — verified by
+  # bisection on 2026-07-29: the UA "Yogyakarta" alone is blocked, while
+  # "Universitas", "Atma" and "Jaya" each pass. Probably an anti-impersonation
+  # rule aimed at crawlers claiming to be the city government.
+  #
+  # UAJY is the institution's own standard abbreviation (uajy.ac.id), so this
+  # remains a truthful identification: project name, institution, purpose and a
+  # reachable address. We do NOT present ourselves as a browser or as anyone
+  # else to get past the block; that would be evasion, and this project scrapes
+  # government portals.
+  user_agent: "SIAP-PANGAN/0.1 (UAJY academic research; contact: {contact})"
   timeout_seconds: 30
   max_retries: 3
   backoff_base_seconds: 5

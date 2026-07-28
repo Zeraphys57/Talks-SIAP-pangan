@@ -18,8 +18,10 @@ updated: 2026-07-28
 # token. Anything not listed here raises during normalization rather than being
 # assumed to be kilograms.
 aliases:
-  kg: [kg, kilogram, "kg.", kgs]
-  liter: [lt, ltr, liter, litre, "1 liter", "1 lt", "per liter"]
+  # "1 kg" / "1kg" forms come from jogja, which embeds the unit in the
+  # commodity name ("Cabai Merah Keriting,1 kg") rather than in a field.
+  kg: [kg, kilogram, "kg.", kgs, "1 kg", "1kg"]
+  liter: [lt, ltr, liter, litre, "1 liter", "1 lt", "1lt", "per liter"]
   butir: [butir, biji]
   ekor: [ekor]
   # Fixed-weight packaging seen on siskaperbapo. Not converted — these belong to

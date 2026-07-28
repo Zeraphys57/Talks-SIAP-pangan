@@ -152,6 +152,53 @@ def test_siskaperbapo_curah_oil_conversion_lands_in_a_sane_place() -> None:
 
 
 # ---------------------------------------------------------------------------
+# jogja embeds the unit in the commodity name, and its satuan field lies
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("Cabai Merah Keriting,1 kg", "1 kg"),
+        ("Minyak Goreng Curah,1 lt", "1 lt"),
+        ("Minyakita,1 lt", "1 lt"),
+        ("Gula Pasir Curah, 1kg", "1kg"),
+        ("Mie Instan, 1 bks", "1 bks"),
+        ("Ayam Kampung Utuh,1 ekor", "1 ekor"),
+        # No suffix at all — falls back to the commodity's canonical unit.
+        ("Beras Cap IR 64 (Medium)", None),
+    ],
+)
+def test_jogja_unit_is_read_from_the_name(name: str, expected: str | None) -> None:
+    from siap.scrapers.jogja import JogjaScraper
+
+    assert JogjaScraper.unit_from_name(name) == expected
+
+
+def test_jogja_name_units_resolve_through_units_yaml() -> None:
+    """The suffixes jogja emits must all be known, or rows would be rejected."""
+    from siap.scrapers.jogja import JogjaScraper
+
+    units = load_units()
+    assert units.canonical_token(JogjaScraper.unit_from_name("Minyak Goreng Curah,1 lt")) == "liter"
+    assert units.canonical_token(JogjaScraper.unit_from_name("Cabai Merah Keriting,1 kg")) == "kg"
+    assert units.canonical_token(JogjaScraper.unit_from_name("Gula Pasir Curah, 1kg")) == "kg"
+
+
+def test_jogja_oil_is_litre_not_kilogram() -> None:
+    """Regression guard for the source's incorrect satuan field.
+
+    jogja's API reports satuan "Kg" for products it names "…,1 lt". Reading the
+    name gives 18,650/litre for curah oil, which matched PIHPS DI Yogyakarta at
+    18,655/litre to 0.03% on 2026-07-28. Trusting satuan and converting would
+    have produced ~16,972, roughly 9% below every neighbouring source.
+    """
+    from siap.scrapers.jogja import JogjaScraper
+
+    assert load_units().canonical_token(
+        JogjaScraper.unit_from_name("Minyak Goreng Curah,1 lt")
+    ) == ("liter")
+
+
+# ---------------------------------------------------------------------------
 # RawObservation plumbing
 # ---------------------------------------------------------------------------
 def test_raw_observation_keeps_the_portal_spelling_and_unit() -> None:
