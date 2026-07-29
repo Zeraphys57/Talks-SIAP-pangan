@@ -7,6 +7,7 @@
  * attention on nothing.
  */
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -16,6 +17,20 @@ import AlertCard from "@/components/AlertCard";
 import { formatLongDate } from "@/lib/format";
 
 export const revalidate = 1800;
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ region: string }>;
+}): Promise<Metadata> {
+  const { region } = await params;
+  const regions = await fetchRegions();
+  const name = regions.find((r) => r.slug === region)?.display_name ?? region;
+  return {
+    title: `Harga pangan ${name} — SIAP-PANGAN`,
+    description: `Harga bahan pangan di ${name} dari portal resmi, dengan penanda bahan yang bergerak tidak biasa.`,
+  };
+}
 
 export async function generateStaticParams() {
   const regions = await fetchRegions();

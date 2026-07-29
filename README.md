@@ -22,7 +22,7 @@ commodity, and presents the result as a mobile-first dashboard for UMKM owners.
 | `engine/config/` | All tunable parameters and reference data (YAML) |
 | `supabase/migrations/` | Numbered SQL migrations — the single source of schema truth |
 | `web/` | Next.js dashboard (read-only) and `/lab` research console |
-| `docs/` | [architecture](docs/architecture.md), [methods](docs/methods.md), [design](docs/design.md), [reproducibility](docs/reproducibility.md), [sources](docs/sources.md), [labelling](docs/labelling.md), [changelog](docs/changelog.md) |
+| `docs/` | [architecture](docs/architecture.md), [methods](docs/methods.md), [design](docs/design.md), [reproducibility](docs/reproducibility.md), [deployment](docs/deployment.md), [sources](docs/sources.md), [labelling](docs/labelling.md), [changelog](docs/changelog.md) |
 | `paper-exports/` | Generated figures and tables (gitignored) |
 
 ## Setup
@@ -137,6 +137,21 @@ resolved parameters and library versions; `siap reproduce` reloads a run's own
 parameters, recomputes every score and diffs them row by row. Last verified:
 run #47, 78,274 scores, all identical. The same check runs on every scheduled
 pipeline. See [`docs/reproducibility.md`](docs/reproducibility.md).
+
+## Deploying, and starting the study
+
+`web/` is the only thing hosted; the engine runs on GitHub Actions against the
+same Supabase project. Root directory `web`, two `NEXT_PUBLIC_*` environment
+variables, nothing else. Full steps — including credential rotation, which
+should happen first — are in [`docs/deployment.md`](docs/deployment.md).
+
+Before Grace and Roy label anything:
+
+```bash
+cd engine
+siap lab-check        # must pass 14/14 — proves the two label sets stay independent
+siap lab-annotator    # confirm exactly who is registered
+```
 
 ## Data sources
 

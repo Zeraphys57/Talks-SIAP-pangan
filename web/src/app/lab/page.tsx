@@ -17,6 +17,7 @@
  * This file could be rewritten carelessly and still not leak them.
  */
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
@@ -230,6 +231,12 @@ export default function LabPage() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <Link
+            href="/lab/sus"
+            className="text-xs text-neutral-500 underline underline-offset-2"
+          >
+            Form SUS
+          </Link>
           <div className="text-right">
             <p className="text-sm font-medium tabular-nums">
               {progress.labeled} / {progress.pool}

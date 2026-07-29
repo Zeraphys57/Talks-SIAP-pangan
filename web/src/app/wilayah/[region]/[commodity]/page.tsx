@@ -7,10 +7,11 @@
  * that any figure walks back to a URL is only real if the reader can see it.
  */
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { fetchCommodity } from "@/lib/dashboard";
+import { db, fetchCommodity, fetchRegions } from "@/lib/dashboard";
 import { formatLongDate, formatPercent, formatRupiah, formatShortDateWithYear } from "@/lib/format";
 import {
   COPY,
@@ -25,6 +26,43 @@ import {
 import PriceChart from "@/components/PriceChart";
 
 export const revalidate = 1800;
+
+/**
+ * The commodity set is fixed and known, so every page is prerendered: 4 regions
+ * x 12 commodities. That makes the common case instant instead of six sequential
+ * database round-trips, and it removes the need for a loading skeleton.
+ *
+ * `dynamicParams = false` is the reason a mistyped slug now returns a real 404.
+ * Rendering unknown params on demand meant streaming began — headers went out
+ * with 200 — before `notFound()` was ever reached, so a page that does not exist
+ * answered "200 OK".
+ */
+export const dynamicParams = false;
+
+export async function generateStaticParams() {
+  const [regions, { data }] = await Promise.all([
+    fetchRegions(),
+    db.from("commodities").select("slug").order("sort_order"),
+  ]);
+  const commodities = (data ?? []) as { slug: string }[];
+  return regions.flatMap((r) =>
+    commodities.map((c) => ({ region: r.slug, commodity: c.slug })),
+  );
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ region: string; commodity: string }>;
+}): Promise<Metadata> {
+  const { region, commodity } = await params;
+  const detail = await fetchCommodity(commodity, region);
+  if (!detail) return { title: "Tidak ditemukan — SIAP-PANGAN" };
+  return {
+    title: `${detail.name} di ${detail.regionName} — SIAP-PANGAN`,
+    description: `Pergerakan harga ${detail.name} di ${detail.regionName} dari portal resmi. Deskriptif, bukan ramalan harga.`,
+  };
+}
 
 export default async function CommodityPage({
   params,

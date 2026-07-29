@@ -15,6 +15,7 @@
  * formula.
  */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
@@ -111,7 +112,10 @@ export default function SusPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6">
       <header>
-        <h1 className="text-lg font-semibold tracking-tight">{SUS_COPY.title}</h1>
+        <Link href="/lab" className="text-sm text-neutral-500 underline underline-offset-2">
+          &larr; Kembali ke pelabelan
+        </Link>
+        <h1 className="mt-3 text-lg font-semibold tracking-tight">{SUS_COPY.title}</h1>
         <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">{SUS_COPY.intro}</p>
       </header>
 
