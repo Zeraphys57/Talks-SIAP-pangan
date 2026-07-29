@@ -6,6 +6,64 @@ reason, so they can be defended rather than discovered.
 
 ---
 
+## M4 — Regime clustering (2026-07-29)
+
+K-Means at **commodity x region x month**, 1,644 cells. The full k=2..8 curve is
+recorded; zones are assigned post hoc by ranking centroids.
+
+### The silhouette preferred a k that cannot produce the specified output
+
+| k | silhouette | merah / kuning / hijau |
+|---:|---:|---|
+| 2 | **0.7807** | 70 / **0** / 1574 |
+| 3 | 0.6504 | 48 / 194 / 1402 |
+| 4 | 0.6097 | 5 / 315 / 1324 |
+| 5 | 0.6211 | 7 / 353 / 1284 |
+
+§6.3 says "select by highest silhouette" and "do not force k=3", but also
+specifies a three-zone output in which the middle rank becomes `kuning`. With
+k=2 those requirements are incompatible: two clusters cannot be ranked into
+three zones, so `kuning` was unreachable and **every** cell was merah or hijau.
+
+The failure was not merely cosmetic. k=2 splits "catastrophic" from "everything
+else", so `jawa_timur / cabai-rawit-merah / 2026-07` — 5% daily volatility and a
+**+25% rise** — landed in the calm cluster and displayed as **hijau**. For a
+warung owner that is exactly backwards.
+
+Silhouette optimises separation, not zoning usefulness: isolating the ~4% of
+extreme cells is trivially separable and scores well without describing two
+meaningful regimes.
+
+**Decision taken at the M4 gate: `k_select_min: 3`.** k=2 is still fitted,
+still scored and still appears in the recorded curve and the paper figure — it
+is excluded from *selection* only. "Do not force k=3" is read as "do not pin it
+at exactly 3"; k remains free to be 3 through 8. The write-up must state that
+k=2 scored highest and why it was excluded.
+
+With k=3 the clusters read cleanly, and the misclassified month becomes kuning:
+
+| cluster | volatility | cum_change | cells | zone |
+|---:|---:|---:|---:|---|
+| 2 | 0.05439 | **+83.36%** | 48 | merah |
+| 0 | 0.05492 | −10.31% | 194 | kuning |
+| 1 | 0.00893 | +0.35% | 1402 | hijau |
+
+The gate's sanity check passes: beras-medium, beras-premium, gula-pasir and both
+oils reach merah **zero** times; cabai occupies 44 of the 48 merah cells.
+
+### Nuance for M8's copy: kuning means unstable, not rising
+
+At k=3 the kuning centroid is *volatile and mildly falling* (−10.31%), because
+the severity score weights volatility and direction equally. Both
+`cabai-rawit-merah +25.23%` and `bawang-merah −25.36%` land there.
+
+That is defensible — an unstable market is risky to buy into in either
+direction — but the dashboard copy must say **"harga tidak stabil"**, not
+"harga naik". Labelling a price *crash* as a rising-price warning would be
+wrong, and a warung owner would notice.
+
+---
+
 ## M3 — Anomaly modules (2026-07-29)
 
 Z-Score and Isolation Forest per §6.1–6.2, 60 series, 78k score rows.

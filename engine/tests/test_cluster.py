@@ -154,11 +154,32 @@ def test_fit_records_the_whole_k_search_not_just_the_winner() -> None:
     assert all(e.inertia > 0 for e in model.k_search)
 
 
-def test_fit_selects_the_k_with_the_highest_silhouette() -> None:
+def test_fit_selects_the_best_k_at_or_above_the_selection_floor() -> None:
     cfg = load_analysis()
     model = kmeans.fit(_mixed_cells(), cfg.kmeans, cfg.seed)
-    best = max(model.k_search, key=lambda e: e.silhouette)
-    assert model.k_selected == best.k
+    eligible = [e for e in model.k_search if e.k >= cfg.kmeans.k_select_min]
+    assert model.k_selected == max(eligible, key=lambda e: e.silhouette).k
+    assert model.k_selected >= cfg.kmeans.k_select_min
+
+
+def test_k_below_the_selection_floor_is_scored_but_cannot_win() -> None:
+    """k=2 stays in the recorded curve for the paper, but is never selected.
+
+    On the real data k=2 has the highest silhouette by a wide margin, and would
+    leave `kuning` unreachable. Decision taken at the M4 gate; see analysis.yaml.
+    """
+    cfg = load_analysis()
+    model = kmeans.fit(_mixed_cells(), cfg.kmeans, cfg.seed)
+    recorded = {e.k for e in model.k_search}
+    assert cfg.kmeans.k_min in recorded, "k below the floor vanished from the curve"
+    assert model.k_selected >= cfg.kmeans.k_select_min
+
+
+def test_the_selected_k_can_always_populate_three_zones() -> None:
+    """The floor exists so the specified three-zone output is reachable."""
+    cfg = load_analysis()
+    model = kmeans.fit(_mixed_cells(), cfg.kmeans, cfg.seed)
+    assert set(model.zone_mapping.values()) == {"merah", "kuning", "hijau"}
 
 
 def test_fit_separates_the_two_planted_regimes() -> None:

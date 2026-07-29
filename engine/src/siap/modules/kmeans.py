@@ -124,6 +124,13 @@ def search_k(scaled: np.ndarray, params: KMeansParams, seed: int) -> tuple[list[
     The whole curve is returned, not just the winner — it is a required paper
     figure, and keeping only the selected k would make it unreproducible without
     a re-run.
+
+    **Selection is floored at `k_select_min`, and the curve is not.** On the real
+    data the silhouette prefers k=2, because isolating the ~4% of extreme cells
+    is trivially separable. But the zone rule ranks clusters and takes the
+    extremes, so two clusters leave `kuning` unreachable and a month with 5%
+    daily volatility and a +25% rise lands in the calm cluster. k=2 is therefore
+    still fitted, still scored and still reported — it just cannot win.
     """
     entries: list[KSearchEntry] = []
     # Silhouette needs at least k+1 samples and at least 2 clusters.
@@ -147,7 +154,14 @@ def search_k(scaled: np.ndarray, params: KMeansParams, seed: int) -> tuple[list[
     if not entries:
         raise ValueError("no k in the configured range produced more than one cluster")
 
-    best = max(entries, key=lambda e: e.silhouette)
+    selectable = [e for e in entries if e.k >= params.k_select_min]
+    if not selectable:
+        raise ValueError(
+            f"no k >= k_select_min ({params.k_select_min}) was fittable; "
+            f"only {[e.k for e in entries]} produced more than one cluster"
+        )
+
+    best = max(selectable, key=lambda e: e.silhouette)
     return entries, best.k
 
 

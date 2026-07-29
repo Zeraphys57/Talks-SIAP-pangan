@@ -129,6 +129,24 @@ kmeans:
   k_min: 2
   k_max: 8
 
+  # Selection floor, distinct from the search range.
+  #
+  # On the real data the silhouette prefers k=2 (0.7807 against 0.6504 for k=3),
+  # because isolating the ~4% of extreme cells is trivially separable. But the
+  # zone rule ranks clusters and takes the extremes, so k=2 has no middle rank
+  # and `kuning` becomes unreachable — and worse, a month with 5% daily
+  # volatility and a +25% rise falls into the calm cluster and reads hijau. For
+  # a warung owner that is exactly backwards.
+  #
+  # "Do not force k=3" is read as "do not pin it at exactly 3": k is still free
+  # to be 3, 4, 5, 6, 7 or 8, chosen by silhouette. It is not free to be 2,
+  # because 2 cannot populate the three-zone output the same section specifies.
+  #
+  # k=2 is still fitted and still appears in the recorded curve and the paper
+  # figure; it is excluded from *selection* only, and the write-up states that
+  # it scored highest and why it was excluded. Decision taken at the M4 gate.
+  k_select_min: 3
+
   n_init: 10
   max_iter: 300
 
