@@ -6,6 +6,68 @@ reason, so they can be defended rather than discovered.
 
 ---
 
+## M5 — Seasonality (2026-07-29)
+
+STL at weekly resolution, `period=52`, `seasonal=13`, `robust=True`.
+**48 of 60 series decomposed, 12 skipped**, 7,188 weekly component rows.
+
+The 12 skips are every `kota_yogyakarta` series, at 1 week against the 104-week
+floor. That is the coverage guard doing its job, not a failure: jogja exposes no
+historical endpoint, so the city has no archive and cannot have seasonality.
+Each skip records its actual week count in the run notes.
+
+### The derived "periode rawan" matches the Indonesian calendar
+
+Independently per commodity and region, with no calendar knowledge in the code:
+
+| commodity | top-decile weeks | corresponds to |
+|---|---|---|
+| beras medium & premium | W07–W13 (9 Feb – 29 Mar) | **paceklik**, the lean season before the March–April harvest |
+| cabai (both) | W08–W11 **and** W45–W50 | rainy-season supply disruption, twice a year |
+| telur & daging ayam | W08–W15 (Feb – mid Apr) | Ramadan and Idul Fitri demand |
+| gula pasir | W14–W19 (30 Mar – 10 May) | Lebaran baking |
+| minyak goreng | W12–W19 | Lebaran |
+| daging sapi | W25–W31 (Jun – Aug) | **Idul Adha** / qurban |
+
+Rice peaking before the harvest and beef peaking at qurban are exactly what the
+agricultural and religious calendars predict, and neither is encoded anywhere in
+the pipeline.
+
+### Limitation: STL cannot track a lunar festival
+
+`period=52` assumes the seasonal pattern repeats on a **fixed Gregorian**
+schedule. Ramadan and Idul Fitri follow the Islamic lunar calendar and drift
+about 11 days earlier each year:
+
+| year | Idul Fitri | ISO week |
+|---|---|---|
+| 2024 | 10 Apr | W15 |
+| 2025 | 31 Mar | W14 |
+| 2026 | 20 Mar | W12 |
+
+Across the three years of archive the festival moves roughly three weeks, so a
+fixed-period decomposition **smears the Ramadan peak across ~5 weeks and
+understates its amplitude**. The broad W08–W19 bands above are that smearing,
+not a genuinely five-week-long demand event.
+
+Consequences, recorded rather than worked around:
+
+* "Periode rawan" for Ramadan-sensitive commodities (telur, ayam, gula, minyak)
+  is **wider and flatter than reality**. It errs toward warning early, which is
+  the safer direction for a warung owner, but it is not precise.
+* The effect worsens as the archive lengthens — five years of data spread the
+  festival across nearly two months.
+* The clean fix is a lunar-calendar regressor or aligning observations to days
+  from Idul Fitri rather than to calendar weeks. That is beyond §6.4 as
+  specified and is **not** attempted here; it belongs in the paper's limitations
+  section and in future work.
+
+Commodities driven by the solar agricultural calendar — rice at paceklik, chilli
+in the rainy season — are unaffected, and their windows are correspondingly
+sharp.
+
+---
+
 ## M4 — Regime clustering (2026-07-29)
 
 K-Means at **commodity x region x month**, 1,644 cells. The full k=2..8 curve is

@@ -664,5 +664,50 @@ def cluster_cmd() -> None:
         )
 
 
+@cli.command("seasonal")
+@click.option("--year", default=2026, show_default=True, help="Calendar year for week dates.")
+def seasonal_cmd(year: int) -> None:
+    """Run STL decomposition — the M5 gate output."""
+    from .modules.stl import iso_week_dates
+    from .seasonal import run_seasonal
+
+    try:
+        with connect() as conn:
+            report = run_seasonal(conn)
+    except (MissingSetting, DatabaseError, ConfigError) as exc:
+        _fatal(str(exc))
+        return
+
+    click.echo(
+        f"run #{report.run_id}: {len(report.decomposed)} decomposed, "
+        f"{len(report.skipped)} skipped, {report.rows_written:,} weekly rows\n"
+    )
+
+    click.echo("=" * 96)
+    click.echo("COVERAGE AND 'PERIODE RAWAN NAIK' (top-decile seasonal weeks)")
+    click.echo("=" * 96)
+
+    for result in report.decomposed:
+        spans = []
+        for week in result.rawan_weeks:
+            try:
+                monday, sunday = iso_week_dates(week, year)
+            except ValueError:
+                continue
+            spans.append(f"W{week:02d} ({monday:%d %b}-{sunday:%d %b})")
+        click.echo(f"\n  {result.region}/{result.commodity}  —  {result.weeks} weeks")
+        click.echo(f"      {', '.join(spans) if spans else '(none)'}")
+
+    if report.skipped:
+        click.echo()
+        click.echo("=" * 96)
+        click.echo(f"SKIPPED ({len(report.skipped)}) — coverage guard, not a failure")
+        click.echo("=" * 96)
+        for result in report.skipped:
+            click.echo(
+                click.style(f"  {result.region}/{result.commodity}: {result.skipped}", fg="yellow")
+            )
+
+
 if __name__ == "__main__":  # pragma: no cover
     cli()

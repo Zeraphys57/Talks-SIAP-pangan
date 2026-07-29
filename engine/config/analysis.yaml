@@ -167,3 +167,34 @@ kmeans:
   # the proposal's contradiction between "find the optimal K" and "three zones".
   zone_weight_volatility: 0.5
   zone_weight_cum_change: 0.5
+
+# ---------------------------------------------------------------------------
+# 6.4 STL seasonal decomposition
+# ---------------------------------------------------------------------------
+stl:
+  # Weekly resampling. Daily food prices are too noisy for a stable annual
+  # seasonal estimate, and the questions this answers ("which weeks are risky?")
+  # are weekly questions.
+  resample_freq: W
+
+  # One year of weeks.
+  period: 52
+
+  # Length of the seasonal smoother, in periods. Must be odd. 13 lets the
+  # seasonal shape drift slowly across years rather than being frozen.
+  seasonal: 13
+
+  # Median-based fitting, so a single spike does not bend the trend around it.
+  # Indonesian chilli prices spike hard; a non-robust fit would absorb those
+  # into the seasonal component and then fail to flag the next one.
+  robust: true
+
+  # Two full cycles. Below this the seasonal and trend components are not
+  # separable and any decomposition is an artefact — the commodity is skipped
+  # and the reason recorded, never decomposed anyway to produce a plausible
+  # looking curve.
+  min_weeks: 104
+
+  # "Periode rawan naik": the calendar weeks whose mean seasonal component sits
+  # in the top decile of that commodity's own seasonal cycle.
+  rawan_quantile: 0.9

@@ -35,6 +35,8 @@ dependencies = [
     "pandas>=2.2",           # series handling; rolling windows
     "numpy>=1.26",
     "scikit-learn>=1.5",     # IsolationForest, StandardScaler, KMeans (M4)
+    # M5 — seasonal decomposition
+    "statsmodels>=0.14",     # STL
 ]
 
 [project.optional-dependencies]

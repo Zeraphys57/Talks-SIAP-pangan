@@ -474,19 +474,41 @@ class KMeansParams(_Strict):
         return self
 
 
+class STLParams(_Strict):
+    resample_freq: str
+    period: int = Field(gt=1)
+    seasonal: int = Field(gt=1)
+    robust: bool
+    min_weeks: int = Field(gt=0)
+    rawan_quantile: float = Field(gt=0, lt=1)
+
+    @model_validator(mode="after")
+    def _seasonal_is_odd_and_coverage_allows_two_cycles(self) -> STLParams:
+        if self.seasonal % 2 == 0:
+            raise ValueError(f"stl.seasonal must be odd, got {self.seasonal}")
+        if self.min_weeks < 2 * self.period:
+            raise ValueError(
+                f"min_weeks ({self.min_weeks}) is below two full cycles "
+                f"(2 x period = {2 * self.period}); STL cannot separate seasonal "
+                f"from trend with less"
+            )
+        return self
+
+
 class AnalysisConfig(_Strict):
     seed: int
     input: InputPolicy
     zscore: ZScoreParams
     iforest: IForestParams
     kmeans: KMeansParams
+    stl: STLParams
 
 
 @lru_cache(maxsize=1)
 def load_analysis() -> AnalysisConfig:
     """Load and validate analysis.yaml."""
     doc = _read_yaml(config_dir() / "analysis.yaml")
-    for key in ("seed", "input", "zscore", "iforest", "kmeans"):
+    for key in ("seed", "input", "zscore", "iforest", "kmeans", "stl"):
         if key not in doc:
             raise ConfigError(f"analysis.yaml has no top-level {key!r}")
     try:
@@ -496,6 +518,7 @@ def load_analysis() -> AnalysisConfig:
             zscore=ZScoreParams(**doc["zscore"]),
             iforest=IForestParams(**doc["iforest"]),
             kmeans=KMeansParams(**doc["kmeans"]),
+            stl=STLParams(**doc["stl"]),
         )
     except ValueError as exc:
         raise ConfigError(f"analysis.yaml is invalid: {exc}") from exc
