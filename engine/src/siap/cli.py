@@ -709,5 +709,93 @@ def seasonal_cmd(year: int) -> None:
             )
 
 
+@cli.command("fuse")
+@click.option("--board", default=25, show_default=True, help="Rows of the alert board to print.")
+def fuse_cmd(board: int) -> None:
+    """Compute fusion alerts — the M6 gate output."""
+    from .config import load_fusion
+    from .fuse import alert_board, run_fusion, strongest_alert
+    from .modules.fusion import explain
+
+    try:
+        cfg = load_fusion()
+        with connect() as conn:
+            report = run_fusion(conn, cfg)
+            rows = alert_board(conn, report.run_id)
+            worked = strongest_alert(conn, report.run_id)
+    except (MissingSetting, DatabaseError, ConfigError) as exc:
+        _fatal(str(exc))
+        return
+
+    click.echo(
+        f"run #{report.run_id} from anomaly run #{report.source_run_id}: "
+        f"{report.rows_written:,} alerts  "
+        + ", ".join(f"{k}={v:,}" for k, v in sorted(report.level_counts.items()))
+    )
+    if report.downgrades:
+        click.echo(
+            "  downgrades: " + ", ".join(f"{k}={v:,}" for k, v in sorted(report.downgrades.items()))
+        )
+
+    click.echo()
+    click.echo("=" * 112)
+    click.echo(f"ALERT BOARD — {rows[0]['obs_date'] if rows else '(none)'}")
+    click.echo("=" * 112)
+    click.echo(
+        f"  {'level':<8}{'region':<17}{'commodity':<24}"
+        f"{'F':>8}{'A':>8}{'M':>8}{'D':>8}{'C':>8}  both  src  reason"
+    )
+    for r in rows[:board]:
+        comp = r["components"]
+        level = str(r["level"])
+        colour = {"merah": "red", "kuning": "yellow", "hijau": "green"}[level]
+        c_val = comp.get("C")
+        click.echo(
+            f"  {click.style(level.ljust(8), fg=colour)}{r['region']!s:<17}{r['commodity']!s:<24}"
+            f"{float(r['fusion_score']):>8.4f}{float(comp['A']):>8.4f}{float(comp['M']):>8.4f}"
+            f"{float(comp['D']):>8.4f}"
+            f"{('  n/a' if c_val is None else f'{float(c_val):>8.4f}')}"
+            f"{str(comp['both_flagged'])[:1]:>6}"
+            f"{int(comp['n_sources_reporting']):>5}  {comp.get('reason', '')}"
+        )
+
+    if worked:
+        comp = worked["components"]
+        click.echo()
+        click.echo("=" * 112)
+        click.echo("WORKED EXAMPLE — check this arithmetic by hand")
+        click.echo("=" * 112)
+        click.echo(f"  {worked['region']} / {worked['commodity']} / {worked['obs_date']}")
+        if worked["price_median"] is not None and worked["price_prev7"] is not None:
+            now, before = float(worked["price_median"]), float(worked["price_prev7"])
+            click.echo(
+                f"    price  : Rp {before:,.0f} (7d ago) -> Rp {now:,.0f}"
+                f"   = {(now / before - 1) * 100:+.2f}%"
+            )
+        click.echo(f"    zscore norm={comp.get('norm_zscore')}  flagged={comp['both_flagged']}")
+        click.echo(f"    iforest norm={comp.get('norm_iforest')}")
+        click.echo(
+            f"    sources: {comp['n_sources_flagging']} flagging "
+            f"of {comp['n_sources_reporting']} reporting"
+        )
+        click.echo(
+            f"    demand : {'absent (Trends throttled)' if not comp.get('demand_available') else comp.get('demand_z52')}"
+        )
+        click.echo()
+        from .modules.fusion import FusionResult
+
+        click.echo(
+            explain(
+                FusionResult(
+                    score=float(worked["fusion_score"]),
+                    level=str(worked["level"]),
+                    components=comp,
+                    corroboration=worked["corroboration"],
+                ),
+                cfg,
+            )
+        )
+
+
 if __name__ == "__main__":  # pragma: no cover
     cli()

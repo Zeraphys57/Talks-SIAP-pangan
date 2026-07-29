@@ -1,0 +1,87 @@
+# Multi-Signal Fusion Engine (§6.5).
+#
+# The proposal names fusion as its core contribution and never defines it. This
+# file is the definition. Every weight and threshold is swept in M7; nothing
+# here may be hardcoded in a module body.
+#
+#     A = max(A_zscore, A_iforest) * (1 + both_flagged_bonus * both_flagged)   capped at 1
+#     M = clip(|pct_change_7d| / momentum_scale, 0, 1)
+#     D = clip(demand_z52 / demand_scale, 0, 1)
+#     C = n_sources_flagging / n_sources_reporting
+#
+#     F = w_A*A + w_M*M + w_D*D + w_C*C
+
+version: 1
+updated: 2026-07-29
+
+weights:
+  anomaly: 0.45
+  momentum: 0.25
+  demand: 0.20
+  corroboration: 0.10
+
+components:
+  # Both detectors agreeing is worth more than either alone, but not by much:
+  # M3 measured their Jaccard overlap at 9.7%, so agreement is informative
+  # precisely because it is rare.
+  both_flagged_bonus: 0.15
+
+  # A 15% move over seven days saturates the momentum term. The ground-truth
+  # definition in §7.2 uses ±10% against a 30-day mean; 15% over 7 days is a
+  # comparable but not identical bar, deliberately — M must not be a restatement
+  # of the label it is evaluated against.
+  momentum_scale: 0.15
+
+  # Three standard deviations of search interest saturates demand.
+  demand_scale: 3.0
+
+thresholds:
+  # F at or above this is merah — but only with corroboration; see below.
+  merah: 0.70
+  kuning: 0.40
+
+  # merah additionally requires C >= this. A single portal shouting on its own
+  # is not enough to tell a warung owner to change their buying.
+  merah_min_corroboration: 0.5
+
+  # ...and at least this many sources must have reported that day.
+  #
+  # Without it the rule is trivially satisfiable: one source reporting and
+  # flagging gives C = 1/1 = 1.0, which reads as perfect corroboration when in
+  # fact nothing corroborated anything. That is not hypothetical — the most
+  # recent day in the archive is routinely covered by one portal only, because
+  # the others publish later, so *every* "today" alert would have claimed
+  # unanimous agreement from a single source.
+  merah_min_sources_reporting: 2
+
+corroboration:
+  # ---------------------------------------------------------------------------
+  # The brief specifies C = n_sources_flagging / n_sources_reporting but does not
+  # say what makes a *source* flag. M3's detectors run on the reconciled median
+  # series, so no per-source flag exists to count.
+  #
+  # Rather than re-running both detectors per source — which would multiply the
+  # fitting cost and still not be what the brief describes — a source is counted
+  # as flagging when its **own** series moves by at least this fraction over
+  # seven days. Corroboration then means "independent portals saw a comparable
+  # move", which is what the term is for.
+  #
+  # This is an operationalisation of an under-specified requirement, recorded
+  # here and in docs/methods.md rather than left implicit in code.
+  # ---------------------------------------------------------------------------
+  pct_change_window_days: 7
+  pct_change_threshold: 0.05
+
+  # When a commodity x region has only ever had one reporting source, C is
+  # undefined rather than zero: there is nothing to corroborate with. Those
+  # alerts are capped at kuning with components.reason = "single_source_coverage".
+  # nasional (sp2kp only) and kota_yogyakarta (jogja only) are both in this
+  # position — see docs/sources.md.
+  single_source_caps_at_kuning: true
+
+recommendations:
+  # Keys into the Bahasa Indonesia copy in web/. Phrased as an observation plus
+  # an option, never a command — "pertimbangkan menunda", not "jangan beli".
+  merah: rec_merah_tunda_pembelian
+  kuning: rec_kuning_pantau
+  hijau: rec_hijau_aman

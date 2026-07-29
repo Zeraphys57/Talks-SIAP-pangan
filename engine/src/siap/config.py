@@ -524,6 +524,88 @@ def load_analysis() -> AnalysisConfig:
         raise ConfigError(f"analysis.yaml is invalid: {exc}") from exc
 
 
+# ---------------------------------------------------------------------------
+# fusion.yaml
+# ---------------------------------------------------------------------------
+class FusionWeights(_Strict):
+    anomaly: float = Field(ge=0)
+    momentum: float = Field(ge=0)
+    demand: float = Field(ge=0)
+    corroboration: float = Field(ge=0)
+
+    @model_validator(mode="after")
+    def _weights_sum_to_one(self) -> FusionWeights:
+        total = self.anomaly + self.momentum + self.demand + self.corroboration
+        if abs(total - 1.0) > 1e-9:
+            raise ValueError(
+                f"fusion weights must sum to 1.0, got {total}. A score that cannot "
+                f"reach 1 makes the merah threshold unreachable and the sweep in M7 "
+                f"uninterpretable."
+            )
+        return self
+
+
+class FusionComponents(_Strict):
+    both_flagged_bonus: float = Field(ge=0)
+    momentum_scale: float = Field(gt=0)
+    demand_scale: float = Field(gt=0)
+
+
+class FusionThresholds(_Strict):
+    merah: float = Field(gt=0, le=1)
+    kuning: float = Field(gt=0, le=1)
+    merah_min_corroboration: float = Field(ge=0, le=1)
+    # C = 1/1 = 1.0 satisfies any ratio threshold while corroborating nothing,
+    # so the count is gated separately from the ratio.
+    merah_min_sources_reporting: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def _ordered(self) -> FusionThresholds:
+        if self.kuning >= self.merah:
+            raise ValueError(f"kuning threshold ({self.kuning}) must be below merah ({self.merah})")
+        return self
+
+
+class CorroborationParams(_Strict):
+    pct_change_window_days: int = Field(gt=0)
+    pct_change_threshold: float = Field(gt=0)
+    single_source_caps_at_kuning: bool
+
+
+class FusionConfig(_Strict):
+    weights: FusionWeights
+    components: FusionComponents
+    thresholds: FusionThresholds
+    corroboration: CorroborationParams
+    recommendations: dict[str, str]
+
+    @model_validator(mode="after")
+    def _recommendations_cover_every_level(self) -> FusionConfig:
+        missing = {"merah", "kuning", "hijau"} - set(self.recommendations)
+        if missing:
+            raise ValueError(f"recommendations missing for level(s): {sorted(missing)}")
+        return self
+
+
+@lru_cache(maxsize=1)
+def load_fusion() -> FusionConfig:
+    """Load and validate fusion.yaml."""
+    doc = _read_yaml(config_dir() / "fusion.yaml")
+    for key in ("weights", "components", "thresholds", "corroboration", "recommendations"):
+        if key not in doc:
+            raise ConfigError(f"fusion.yaml has no top-level {key!r}")
+    try:
+        return FusionConfig(
+            weights=FusionWeights(**doc["weights"]),
+            components=FusionComponents(**doc["components"]),
+            thresholds=FusionThresholds(**doc["thresholds"]),
+            corroboration=CorroborationParams(**doc["corroboration"]),
+            recommendations=doc["recommendations"],
+        )
+    except ValueError as exc:
+        raise ConfigError(f"fusion.yaml is invalid: {exc}") from exc
+
+
 def config_fingerprint() -> dict[str, str | int | None]:
     """Summary of the loaded reference data, for `analysis_runs.params`."""
     ref = load_reference()

@@ -17,7 +17,7 @@ constrained by the policies in supabase/migrations/0006_rls.sql.
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import Any
 
@@ -30,6 +30,11 @@ log = logging.getLogger(__name__)
 
 Row = dict[str, Any]
 Conn = psycopg.Connection[Row]
+
+# psycopg accepts either positional (%s) or named (%(name)s) parameters. Both
+# are used here: positional for short queries, named where a CTE references the
+# same value more than once and repeating it positionally invites mismatches.
+Params = Sequence[Any] | Mapping[str, Any] | None
 
 
 class DatabaseError(RuntimeError):
@@ -63,19 +68,19 @@ def connect(*, autocommit: bool = False, dsn: str | None = None) -> Iterator[Con
         conn.close()
 
 
-def fetch_all(conn: Conn, sql: str, params: Sequence[Any] | None = None) -> list[Row]:
+def fetch_all(conn: Conn, sql: str, params: Params = None) -> list[Row]:
     with conn.cursor() as cur:
         cur.execute(sql, params)
         return cur.fetchall()
 
 
-def fetch_one(conn: Conn, sql: str, params: Sequence[Any] | None = None) -> Row | None:
+def fetch_one(conn: Conn, sql: str, params: Params = None) -> Row | None:
     with conn.cursor() as cur:
         cur.execute(sql, params)
         return cur.fetchone()
 
 
-def fetch_value(conn: Conn, sql: str, params: Sequence[Any] | None = None) -> Any:
+def fetch_value(conn: Conn, sql: str, params: Params = None) -> Any:
     """Return the first column of the first row, or None."""
     row = fetch_one(conn, sql, params)
     if row is None:
@@ -83,7 +88,7 @@ def fetch_value(conn: Conn, sql: str, params: Sequence[Any] | None = None) -> An
     return next(iter(row.values()))
 
 
-def execute(conn: Conn, sql: str, params: Sequence[Any] | None = None) -> int:
+def execute(conn: Conn, sql: str, params: Params = None) -> int:
     """Execute one statement; return the affected row count."""
     with conn.cursor() as cur:
         cur.execute(sql, params)
