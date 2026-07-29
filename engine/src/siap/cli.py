@@ -10,6 +10,7 @@ gate that cannot be verified.
 
 from __future__ import annotations
 
+import statistics
 import sys
 import textwrap
 from datetime import date, datetime
@@ -580,6 +581,70 @@ def preprocess_cmd(disagreements: int, write_report: bool) -> None:
         _fatal(str(exc))
         return
 
+    click.echo("=" * 96)
+    click.echo("SOURCE LINKING — every source put on one level before reconciling")
+    click.echo("=" * 96)
+    linked = report.linked_sources
+    if not linked:
+        click.echo("  no series has more than one source; nothing to link")
+    else:
+        cvs = [o["ratio_cv_pct"] for o in linked if o["ratio_cv_pct"] is not None]
+        drifts = [abs(o["ratio_drift_pct"]) for o in linked if o["ratio_drift_pct"] is not None]
+        click.echo(
+            f"  {len(linked)} source(s) rebased across "
+            f"{len({(o['commodity'], o['region']) for o in linked})} series"
+        )
+        if cvs:
+            click.echo(
+                f"  residual after linking (ratio cv): median {statistics.median(cvs):.1f}%, "
+                f"max {max(cvs):.1f}%"
+            )
+        if drifts:
+            over = sum(1 for d in drifts if d > 5)
+            click.echo(
+                f"  factor drift first->last third:   median {statistics.median(drifts):.1f}%, "
+                f"max {max(drifts):.1f}%  ({over} series above 5%)"
+            )
+        widest = sorted(linked, key=lambda o: -abs(o["factor"] - 1))[:5]
+        click.echo("\n  largest corrections:")
+        for o in widest:
+            commodity, region = str(o["commodity"]), str(o["region"])
+            click.echo(
+                f"    {commodity:<24}{region:<15}"
+                f"{o['source']} x{o['factor']:.4f} -> {o['reference']}"
+                f"   (n={o['n_overlap']}, cv={o['ratio_cv_pct']:.1f}%)"
+            )
+        weak = report.weak_links
+        if weak:
+            click.echo(
+                click.style(
+                    f"\n  {len(weak)} link(s) with residual >= 5% — a single factor "
+                    f"describes these poorly:",
+                    fg="yellow",
+                )
+            )
+            for o in sorted(weak, key=lambda x: -(x["ratio_cv_pct"] or 0)):
+                commodity, region = str(o["commodity"]), str(o["region"])
+                click.echo(
+                    f"    {commodity:<24}{region:<15}"
+                    f"{o['source']}/{o['reference']}  cv={o['ratio_cv_pct']:.1f}%"
+                )
+            click.echo(
+                "    Kept, not dropped: this is real divergence between surveys of\n"
+                "    different markets, and removing the second source would cost\n"
+                "    corroboration on the most volatile commodities. See\n"
+                "    source_offsets.ratio_cv_pct to identify affected days."
+            )
+
+    for o in report.excluded_sources:
+        click.echo(
+            click.style(
+                f"  EXCLUDED {o['commodity']}/{o['region']}: {o['source']} — {o['excluded_reason']}",
+                fg="yellow",
+            )
+        )
+
+    click.echo()
     click.echo("=" * 96)
     click.echo("COMPLETENESS PER COMMODITY x REGION")
     click.echo("=" * 96)

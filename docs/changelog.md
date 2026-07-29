@@ -15,20 +15,16 @@ precision/recall need two people to label 399 candidates, and inventing labels
 is the one thing this project must never do. `siap kappa` currently answers
 *"need two annotators, found none"*.
 
-### A blocking data defect, found by looking at the qualitative figure
+### A data defect found by looking at the qualitative figure, and fixed
 
 `fig_series_beras_medium_jawa_tengah` showed five identical one-day spikes to
 the same price, at roughly monthly intervals, each returning to exactly the
-prior level. Staple prices do not do that. The cause:
+prior level. Staple prices do not do that.
 
-| | pihps | sp2kp |
-|---|---:|---:|
-| beras-medium / jawa\_tengah, 2026 | mean 15,691 (sd 118) | mean 13,257 (sd 65) |
-
-The two sources sit **18% apart** and each is internally stable. They measure
-different things — PIHPS samples traditional-market retail, SP2KP is Kemendag's
-own panel — so the gap is real, not a parsing bug. Across the whole dataset the
-systematic offsets are:
+The cause was in M2, not the detectors. `price_daily_unified.price_median` was a
+median over *whichever sources reported that day*, and the sources do not
+measure the same thing — PIHPS samples traditional-market retail, SP2KP is
+Kemendag's panel, Siskaperbapo is East Java's provincial survey:
 
 | pair | overlapping days | mean ratio | sd |
 |---|---:|---:|---:|
@@ -36,41 +32,112 @@ systematic offsets are:
 | pihps / siskaperbapo | 9,384 | 1.0384 | 0.0623 |
 | siskaperbapo / sp2kp | 6,615 | 1.0060 | 0.0260 |
 
-`price_daily_unified.price_median` is a median across *whichever sources
-reported that day*. When membership changes, the series steps by the offset
-between them. That step is not a price movement, and the detectors cannot tell
-the difference:
+For beras-medium in Jawa Tengah the gap was 18% (pihps 15,691, sp2kp 13,257),
+each internally stable. So when sp2kp went quiet the "median" became pihps alone
+and the series stepped 8.5%. Measured before doing anything about it:
 
-* 36 of 60 series have a varying source count;
-* 6,399 of 39,077 series-days (16.4%) differ in `n_sources` from the day before;
-* **938 of 1,897 daily moves above 5% (49.4%) coincide with a composition
+* 36 of 60 series had a varying source count;
+* 6,399 of 39,077 series-days (16.4%) differed in `n_sources` from the day before;
+* **938 of 1,897 daily moves above 5% (49.4%) coincided with a composition
   change**;
-* 673 of 2,979 Z-Score flags (22.6%) sit on one;
-* **75 of the 399 ground-truth candidates (18.8%) sit on one.**
+* 673 of 2,979 Z-Score flags (22.6%) sat on one;
+* 75 of the 399 ground-truth candidates (18.8%) sat on one.
 
-The z = 99.03 flag on 2026-03-23 is exactly this: sp2kp did not report, so the
-"median" became pihps alone.
+The z = 99.03 flag on 2026-03-23 was exactly this.
 
-**Nothing was changed.** Fixing this means altering what `preprocess` computes,
-which is M2 — a milestone already verified — and the choice between rebasing
-sources to a reference level, restricting each series to a fixed source set, or
-flagging and excluding composition-change days is a research-design decision
-with different consequences for the paper. Per the brief's rule on specs meeting
-reality, it is reported rather than improvised around. It is also **blocking**:
-the pool is drawn and the fix would change which days belong in it, so it should
-be settled before anyone labels, not after.
+**Reported before deciding, because the fix reopens a verified milestone.**
+Four options were put up — rebase, restrict each series to one source, flag and
+exclude the step days, or leave it as a stated limitation. Rebasing was chosen.
 
-### The pool was redrawn once, deliberately
+#### The correction (migration 0009)
+
+Standard index linking. Per commodity x region the best-covered source becomes
+the reference; every other source is multiplied by the *median* ratio of
+reference price to its own over the days both reported. Median rather than mean,
+because one mistyped price would otherwise shift every rebased price in the
+series. Ties on coverage break by name, so a re-run cannot silently pick a
+different basis. A source with fewer than 30 overlapping days is excluded from
+the level rather than linked on a guess — none currently is.
+
+A constant factor was checked before being adopted, across all 60
+(commodity, region, source-pair) combinations:
+
+| | median | max |
+|---|---:|---:|
+| within-series ratio cv | 1.9% | 9.5% |
+| drift, first third vs last third | 1.1% | 10.5% |
+
+The pooled 7.9% was an artefact of averaging across commodities. A ~2% residual
+is an order of magnitude below the 18% gap it removes and well under the 10% bar
+in the operational definition.
+
+This is **not** the cooking-oil density M2 refused to refit. A density is a
+physical constant with a true value that fitting would corrupt; a survey-frame
+offset has no true value, because the two surveys really do price different
+baskets. Linking series collected on different frames is what the correction is
+for. Every factor is persisted in `source_offsets` with its overlap, residual
+and drift, so no rebased price is unauditable.
+
+#### What it actually achieved, measured
+
+| | before | after |
+|---|---:|---:|
+| >5% moves coinciding with a composition change | 938 | 372 |
+| >5% moves with composition unchanged | 959 | 942 |
+| excess move rate on composition-change days | 5.02x | 2.02x |
+
+The genuine moves are untouched, which is the point. And the residual is sharply
+localised — split by how well a single factor describes the link:
+
+| link quality | composition-change days | >5% moves | rate |
+|---|---:|---:|---:|
+| ratio cv < 5% | 5,170 | 71 | **1.37%** |
+| ratio cv >= 5% | 1,229 | 301 | **24.49%** |
+
+Base rate on days with no composition change is 2.88%. So where the two sources
+track each other the artefact is **gone** — 1.37% is *below* the base rate.
+Everything left lives in 8 of 48 links, all of them chillies, shallots and
+garlic.
+
+**Those 8 were kept, not dropped.** A 6-9% daily divergence between two surveys
+of different markets for cabai is real heterogeneity, not a broken link, and
+excluding the second source would cost corroboration on precisely the most
+volatile commodities. `siap preprocess` names them at every run and
+`source_offsets.ratio_cv_pct` identifies the affected days, so the limitation is
+visible rather than buried.
+
+Not claimed: that composition artefacts are eliminated. 19.8% of Z-Score flags
+and 41.7% of IsolationForest flags still fall on composition-change days, above
+the 16.4% base rate. What is claimed is what the table above shows.
+
+#### Knock-on
+
+`source_spread_pct` is now computed on the rebased scale, so the
+"largest cross-source disagreements" report measures genuine same-day
+disagreement instead of re-reporting the constant offset. Mean spread is 2.47%.
+
+The whole pipeline was re-run (runs #46-#50) and the pool re-sampled (#51). The
+new strongest flagged move is a one-day 11% drop in daging-sapi in DI Yogyakarta
+that recovers immediately — a real outlier in the source data, and exactly the
+kind of case the ground truth exists to adjudicate, rather than an artefact of
+our own arithmetic.
+
+### The pool was redrawn, deliberately, twice
 
 The SP2KP provincial backfill finished during M7, taking sp2kp from
 national-only to all four regions (26,909 observations). Every downstream
 artefact was stale, so preprocess -> analyze -> cluster -> seasonal -> fuse were
 re-run (runs #37-#41) and the pool re-sampled from the complete data (run #42).
 
+It was then redrawn a second time after the source-linking fix above, for the
+same reason: the fix changes which days look unusual, so it changes which days
+belong in the pool.
+
 `siap gt-pool --redraw` refuses once any label exists. Redrawing is legitimate
-exactly once — before anyone has judged anything. After that the pool is what
-the labels are a sample of, and replacing it would silently change what every
-downstream number is a statement about.
+only before anyone has judged anything. After that the pool is what the labels
+are a sample of, and replacing it would silently change what every downstream
+number is a statement about — which is why the defect was raised before
+labelling started rather than after.
 
 ### `/lab`, and a hole the RLS posture left
 

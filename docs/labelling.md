@@ -13,16 +13,22 @@ the meantime.
 
 ## Before anyone labels
 
-### 1. Settle the source-composition question
+### 1. Confirm the pipeline is current
 
-`docs/changelog.md` (M7) records a defect that affects **75 of the 399
-candidates**: `price_daily_unified.price_median` is a median over whichever
-sources reported that day, and the sources sit systematically apart, so the
-series steps when membership changes. Those steps are not price movements.
+The pool must be drawn from the data the annotators will effectively be judging.
+If anything upstream has changed — new backfill, a preprocessing change — re-run
+`preprocess -> analyze -> cluster -> seasonal -> fuse`, then
+`siap gt-pool --redraw`, **before** labelling starts. Once a label exists the
+pool must not be redrawn, and `siap gt-pool --redraw` refuses by design.
 
-If that is going to be fixed, fix it **before** labelling. The fix changes which
-days belong in the pool, and once a label exists the pool must not be redrawn —
-`siap gt-pool --redraw` refuses, by design.
+This already happened twice during M7: once when SP2KP's provincial backfill
+landed, and once when source linking was added (migration 0009). Both are
+recorded in `docs/changelog.md`.
+
+One limitation survives and is worth knowing while labelling: on eight series —
+cabai, bawang merah and bawang putih — the two sources diverge enough that
+linking them leaves a 5-9% residual. Days where the number of reporting sources
+changes are still noisier there. `source_offsets.ratio_cv_pct` identifies them.
 
 ### 2. Create the two accounts
 

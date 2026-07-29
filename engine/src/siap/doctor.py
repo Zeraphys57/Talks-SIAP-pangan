@@ -43,6 +43,7 @@ TABLE_AUDIENCE: dict[str, Audience] = {
     # derived
     "price_daily_unified": Audience.PUBLIC,
     "demand_signals": Audience.LAB,
+    "source_offsets": Audience.LAB,  # provenance for every rebased price
     # analysis
     "analysis_runs": Audience.PUBLIC,
     "anomaly_scores": Audience.PUBLIC,

@@ -3,7 +3,7 @@
 **Generated** by `siap preprocess --report`. Do not edit by hand — it is
 rebuilt from `price_daily_unified` and will be overwritten.
 
-Generated 2026-07-29 10:23 UTC, covering 2023-07-28 to 2026-07-29.
+Generated 2026-07-29 15:30 UTC, covering 2023-07-28 to 2026-07-29.
 
 ## Overall
 
@@ -99,18 +99,18 @@ are the widest observed, for inspection at the M2 gate.
 
 | region | commodity | date | min | max | sources | spread |
 |---|---|---|---:|---:|---:|---:|
-| jawa_tengah | cabai-merah-keriting | 2024-04-10 | 36,650 | 60,000 | 2 | 48.3% |
-| di_yogyakarta | cabai-merah-keriting | 2024-09-10 | 17,700 | 28,750 | 2 | 47.6% |
-| di_yogyakarta | cabai-merah-keriting | 2024-09-09 | 17,800 | 28,750 | 2 | 47.0% |
-| di_yogyakarta | cabai-rawit-merah | 2024-04-15 | 24,000 | 37,500 | 2 | 43.9% |
-| jawa_tengah | cabai-merah-keriting | 2024-04-11 | 36,650 | 56,667 | 2 | 42.9% |
-| di_yogyakarta | cabai-merah-keriting | 2024-09-11 | 17,200 | 26,250 | 2 | 41.7% |
-| jawa_tengah | cabai-rawit-merah | 2024-04-10 | 35,000 | 52,500 | 2 | 40.0% |
-| di_yogyakarta | cabai-merah-keriting | 2024-11-15 | 15,133 | 22,500 | 2 | 39.1% |
-| di_yogyakarta | cabai-merah-keriting | 2024-09-12 | 16,850 | 25,000 | 2 | 38.9% |
-| di_yogyakarta | cabai-merah-keriting | 2024-09-13 | 17,000 | 25,000 | 2 | 38.1% |
-| di_yogyakarta | cabai-merah-keriting | 2024-11-26 | 14,150 | 20,750 | 2 | 37.8% |
-| di_yogyakarta | cabai-merah-keriting | 2024-11-11 | 15,750 | 22,500 | 2 | 35.3% |
-| jawa_timur | cabai-rawit-merah | 2025-12-02 | 51,761 | 71,800 | 3 | 35.3% |
-| jawa_timur | bawang-merah | 2024-04-16 | 38,754 | 54,200 | 3 | 35.1% |
-| jawa_timur | bawang-merah | 2024-04-10 | 26,000 | 39,250 | 3 | 34.8% |
+| jawa_tengah | cabai-merah-keriting | 2024-04-10 | 36,650 | 64,272 | 2 | 54.7% |
+| jawa_tengah | cabai-merah-keriting | 2024-04-11 | 36,650 | 60,702 | 2 | 49.4% |
+| jawa_tengah | cabai-rawit-merah | 2024-04-10 | 35,000 | 56,119 | 2 | 46.4% |
+| di_yogyakarta | cabai-rawit-merah | 2024-04-15 | 25,084 | 37,500 | 2 | 39.7% |
+| di_yogyakarta | bawang-merah | 2024-04-08 | 36,000 | 53,325 | 2 | 38.8% |
+| di_yogyakarta | cabai-merah-keriting | 2024-04-08 | 37,500 | 54,734 | 2 | 37.4% |
+| di_yogyakarta | cabai-merah-keriting | 2024-09-10 | 20,183 | 28,750 | 2 | 35.0% |
+| di_yogyakarta | cabai-merah-keriting | 2024-09-09 | 20,297 | 28,750 | 2 | 34.5% |
+| jawa_tengah | cabai-merah-keriting | 2024-04-09 | 36,900 | 51,807 | 2 | 33.6% |
+| jawa_tengah | cabai-merah-keriting | 2024-04-08 | 36,850 | 50,867 | 2 | 32.0% |
+| jawa_tengah | cabai-merah-keriting | 2024-05-09 | 40,100 | 55,346 | 2 | 31.9% |
+| jawa_timur | bawang-merah | 2024-04-10 | 26,532 | 38,033 | 3 | 31.9% |
+| jawa_tengah | cabai-merah-keriting | 2024-05-01 | 49,250 | 67,843 | 2 | 31.8% |
+| jawa_tengah | cabai-rawit-merah | 2024-05-01 | 31,100 | 42,757 | 2 | 31.6% |
+| di_yogyakarta | bawang-merah | 2024-04-15 | 36,000 | 49,476 | 2 | 31.5% |

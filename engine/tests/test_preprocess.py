@@ -7,15 +7,19 @@ numbers nobody observed and that nothing downstream can distinguish from data.
 
 from __future__ import annotations
 
+import statistics
 from datetime import date, timedelta
 
 import pytest
 
 from siap.preprocess import (
     MAX_INTERPOLATION_GAP_DAYS,
+    MIN_LINK_OVERLAP_DAYS,
     SeriesPoint,
     _interpolate,
     _reconcile_day,
+    build_series,
+    compute_offsets,
 )
 
 
@@ -138,3 +142,153 @@ def test_imputed_rows_carry_a_method_for_the_check_constraint() -> None:
     out = _run([100.0, None, 300.0])
     for point in out:
         assert (point.imputation_method is not None) == point.is_imputed
+
+
+# ---------------------------------------------------------------------------
+# Source linking (0009)
+#
+# The defect these guard: price_median used to be a median across sources with
+# systematically different levels, so it stepped whenever a source dropped out.
+# 673 of 2,979 Z-Score flags sat on such a step.
+# ---------------------------------------------------------------------------
+def _two_source_days(n: int, base: float, ratio: float, extra_reference_days: int = 5):
+    """`n` overlapping days where 'aaa_rich' reports `base` and 'zzz_cheap' base/ratio.
+
+    The reference gets extra solo days so it wins on coverage rather than on the
+    alphabetical tie-break, which keeps these tests about the linking arithmetic
+    instead of about the tie rule.
+    """
+    days = {
+        date(2024, 1, 1) + timedelta(days=i): [("aaa_rich", base), ("zzz_cheap", base / ratio)]
+        for i in range(n)
+    }
+    for i in range(n, n + extra_reference_days):
+        days[date(2024, 1, 1) + timedelta(days=i)] = [("aaa_rich", base)]
+    return days
+
+
+def test_the_best_covered_source_becomes_the_reference() -> None:
+    by_day = {
+        date(2024, 1, 1): [("zzz_rich", 100.0), ("aaa_cheap", 80.0)],
+        date(2024, 1, 2): [("zzz_rich", 100.0)],
+        date(2024, 1, 3): [("zzz_rich", 100.0)],
+    }
+    offsets = compute_offsets(by_day)
+    assert offsets["zzz_rich"].reference == "zzz_rich", "coverage must beat alphabetical order"
+    assert offsets["zzz_rich"].factor == 1.0
+
+
+def test_the_reference_is_stable_under_a_tie() -> None:
+    """A re-run must not silently pick a different basis and shift every price."""
+    by_day = {date(2024, 1, 1): [("bbb", 100.0), ("aaa", 80.0)]}
+    assert compute_offsets(by_day)["aaa"].reference == "aaa"
+    assert compute_offsets(dict(reversed(list(by_day.items()))))["aaa"].reference == "aaa"
+
+
+def test_a_cheaper_source_is_scaled_up_to_the_reference() -> None:
+    offsets = compute_offsets(_two_source_days(60, 100.0, 1.25))
+    assert offsets["zzz_cheap"].factor == pytest.approx(1.25)
+    assert offsets["zzz_cheap"].reference == "aaa_rich"
+
+
+def test_the_factor_resists_a_single_mistyped_price() -> None:
+    """Median, not mean: one bad ratio would shift every rebased price."""
+    by_day = _two_source_days(60, 100.0, 1.25)
+    by_day[date(2024, 1, 10)] = [("aaa_rich", 100.0), ("zzz_cheap", 0.8)]  # dropped a decimal
+    assert compute_offsets(by_day)["zzz_cheap"].factor == pytest.approx(1.25)
+
+
+def test_a_source_with_too_little_overlap_is_excluded_not_guessed() -> None:
+    """A wrong factor is worse than a missing source: it is undetectable downstream."""
+    by_day = {
+        date(2024, 1, 1) + timedelta(days=i): [("aaa_rich", 100.0)]
+        for i in range(MIN_LINK_OVERLAP_DAYS + 10)
+    }
+    for i in range(MIN_LINK_OVERLAP_DAYS - 1):
+        by_day[date(2024, 1, 1) + timedelta(days=i)].append(("rare", 80.0))
+
+    offset = compute_offsets(by_day)["rare"]
+    assert not offset.usable
+    assert "below the" in (offset.excluded_reason or "")
+
+
+def test_the_residual_and_drift_of_the_link_are_recorded() -> None:
+    """The constant-factor assumption has to be auditable, not assumed."""
+    offsets = compute_offsets(_two_source_days(60, 100.0, 1.25))
+    offset = offsets["zzz_cheap"]
+    assert offset.ratio_cv_pct == pytest.approx(0.0, abs=1e-9)
+    assert offset.ratio_drift_pct == pytest.approx(0.0, abs=1e-9)
+
+
+def test_drift_is_measured_along_the_date_order() -> None:
+    by_day = {}
+    for i in range(60):
+        ratio = 1.0 if i < 30 else 1.2
+        by_day[date(2024, 1, 1) + timedelta(days=i)] = [
+            ("aaa_rich", 120.0),
+            ("zzz_cheap", 120.0 / ratio),
+        ]
+    for i in range(60, 65):
+        by_day[date(2024, 1, 1) + timedelta(days=i)] = [("aaa_rich", 120.0)]
+    assert compute_offsets(by_day)["zzz_cheap"].ratio_drift_pct == pytest.approx(20.0, rel=1e-6)
+
+
+def test_a_source_dropping_out_no_longer_moves_the_level(monkeypatch) -> None:
+    """The regression this whole migration exists for.
+
+    Two sources 25% apart. On day 40 the cheaper one is silent. Before linking,
+    the median jumped to the expensive source's level; after, it does not move.
+    """
+    by_day = _two_source_days(80, 100.0, 1.25)
+    gap_day = date(2024, 1, 1) + timedelta(days=40)
+    by_day[gap_day] = [("aaa_rich", 100.0)]
+
+    offsets = compute_offsets(by_day)
+    rebased = {
+        day: statistics.median([price * offsets[s].factor for s, price in observed])
+        for day, observed in by_day.items()
+    }
+    assert rebased[gap_day] == pytest.approx(100.0)
+    assert rebased[gap_day - timedelta(days=1)] == pytest.approx(100.0)
+
+    raw = {day: statistics.median([p for _, p in obs]) for day, obs in by_day.items()}
+    assert raw[gap_day] == pytest.approx(100.0)
+    assert raw[gap_day - timedelta(days=1)] == pytest.approx(90.0)
+    assert abs(raw[gap_day] / raw[gap_day - timedelta(days=1)] - 1) > 0.10, (
+        "the un-rebased series must show the >10% step this fix removes, "
+        "or this test is not exercising the defect"
+    )
+
+
+def test_build_series_returns_the_offsets_it_used(monkeypatch) -> None:
+    """A rebased price whose factor is not recorded is a number nobody can check."""
+    rows = [
+        {"obs_date": date(2024, 1, 1) + timedelta(days=i), "price_idr": p, "source": s}
+        for i in range(40)
+        for s, p in (("aaa_rich", 100.0), ("zzz_cheap", 80.0))
+    ] + [
+        {"obs_date": date(2024, 1, 1) + timedelta(days=i), "price_idr": 100.0, "source": "aaa_rich"}
+        for i in range(40, 45)
+    ]
+    monkeypatch.setattr("siap.preprocess.fetch_all", lambda *a, **k: rows)
+
+    series, _suspicious, offsets = build_series(object(), 1, 1)
+    assert set(offsets) == {"aaa_rich", "zzz_cheap"}
+    assert offsets["zzz_cheap"].factor == pytest.approx(1.25)
+    assert all(p.price_median == pytest.approx(100.0) for p in series if p.price_median)
+
+
+def test_spread_is_measured_after_rebasing(monkeypatch) -> None:
+    """Otherwise the 'disagreement' report just re-reports the constant offset."""
+    rows = [
+        {"obs_date": date(2024, 1, 1) + timedelta(days=i), "price_idr": p, "source": s}
+        for i in range(40)
+        for s, p in (("aaa_rich", 100.0), ("zzz_cheap", 80.0))
+    ] + [
+        {"obs_date": date(2024, 1, 1) + timedelta(days=i), "price_idr": 100.0, "source": "aaa_rich"}
+        for i in range(40, 45)
+    ]
+    monkeypatch.setattr("siap.preprocess.fetch_all", lambda *a, **k: rows)
+
+    series, _suspicious, _offsets = build_series(object(), 1, 1)
+    assert all(p.spread_pct == pytest.approx(0.0) for p in series if p.spread_pct is not None)
