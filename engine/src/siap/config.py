@@ -495,6 +495,16 @@ class STLParams(_Strict):
         return self
 
 
+class EvaluationParams(_Strict):
+    stratum_a_abs_z: float = Field(gt=0)
+    stratum_a_pct_change_7d: float = Field(gt=0)
+    stratum_b_fraction: float = Field(gt=0, le=2)
+    max_candidates: int = Field(gt=0)
+    tolerance_days: int = Field(ge=0)
+    min_kappa: float = Field(gt=0, lt=1)
+    dev_fraction: float = Field(gt=0, lt=1)
+
+
 class AnalysisConfig(_Strict):
     seed: int
     input: InputPolicy
@@ -502,13 +512,14 @@ class AnalysisConfig(_Strict):
     iforest: IForestParams
     kmeans: KMeansParams
     stl: STLParams
+    evaluation: EvaluationParams
 
 
 @lru_cache(maxsize=1)
 def load_analysis() -> AnalysisConfig:
     """Load and validate analysis.yaml."""
     doc = _read_yaml(config_dir() / "analysis.yaml")
-    for key in ("seed", "input", "zscore", "iforest", "kmeans", "stl"):
+    for key in ("seed", "input", "zscore", "iforest", "kmeans", "stl", "evaluation"):
         if key not in doc:
             raise ConfigError(f"analysis.yaml has no top-level {key!r}")
     try:
@@ -519,6 +530,7 @@ def load_analysis() -> AnalysisConfig:
             iforest=IForestParams(**doc["iforest"]),
             kmeans=KMeansParams(**doc["kmeans"]),
             stl=STLParams(**doc["stl"]),
+            evaluation=EvaluationParams(**doc["evaluation"]),
         )
     except ValueError as exc:
         raise ConfigError(f"analysis.yaml is invalid: {exc}") from exc

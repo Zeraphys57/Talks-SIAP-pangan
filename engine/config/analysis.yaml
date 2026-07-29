@@ -198,3 +198,40 @@ stl:
   # "Periode rawan naik": the calendar weeks whose mean seasonal component sits
   # in the top decile of that commodity's own seasonal cycle.
   rawan_quantile: 0.9
+
+# ---------------------------------------------------------------------------
+# 7. Evaluation protocol
+# ---------------------------------------------------------------------------
+evaluation:
+  # ---- 7.1 candidate pool -------------------------------------------------
+  # Stratum A is deliberately MORE permissive than the detection thresholds
+  # (|z| >= 2.5, contamination 0.03). If annotators only ever saw dates the
+  # model flagged, recall would be undefined — there would be no way to observe
+  # a miss.
+  stratum_a_abs_z: 1.5
+  stratum_a_pct_change_7d: 0.07
+
+  # Stratum B is drawn from dates neither rule touched, at this fraction of the
+  # stratum A size. It is what makes recall computable.
+  stratum_b_fraction: 0.30
+
+  # Cap on the total pool. Two annotators labelling independently is expensive;
+  # a pool nobody finishes yields no kappa at all.
+  max_candidates: 400
+
+  # ---- 7.4 matching -------------------------------------------------------
+  # A detection counts as matching a ground-truth event if it falls within this
+  # many days of the event window.
+  tolerance_days: 3
+
+  # ---- 7.3 agreement ------------------------------------------------------
+  # Below this, the operational definition is too ambiguous to build on. The
+  # brief is explicit: do not proceed, revise the definition, re-label, and
+  # report both rounds.
+  min_kappa: 0.60
+
+  # ---- development / test split ------------------------------------------
+  # Thresholds and weights are tuned on `dev` only. Reporting a number tuned
+  # against the labels it is measured on is leakage, and evaluation_results
+  # records which split every metric came from.
+  dev_fraction: 0.40

@@ -797,5 +797,143 @@ def fuse_cmd(board: int) -> None:
         )
 
 
+@cli.command("gt-pool")
+def gt_pool_cmd() -> None:
+    """Generate the stratified ground-truth candidate pool (§7.1)."""
+    from .config import load_analysis
+    from .evaluate.groundtruth import generate_pool, labelling_progress, pool_summary
+    from .fuse import latest_anomaly_run
+    from .runs import start_run
+
+    try:
+        cfg = load_analysis()
+        with connect() as conn:
+            anomaly_run = latest_anomaly_run(conn)
+            if anomaly_run is None:
+                _fatal("no completed anomaly run; run `siap analyze` first")
+                return
+            run = start_run(
+                conn,
+                "gt_pool",
+                seed=cfg.seed,
+                params={"evaluation": cfg.evaluation.model_dump(), "anomaly_run": anomaly_run},
+            )
+            status = "failed"
+            try:
+                report = generate_pool(conn, anomaly_run, cfg.evaluation, cfg.seed, run.id)
+                run.note(
+                    f"pool: {report.stratum_a} rule_flagged + {report.stratum_b} "
+                    f"random_control = {report.total}; {report.written} written, "
+                    f"{report.skipped_existing} already present"
+                )
+                status = "success"
+            finally:
+                run.finish(status)
+            summary = pool_summary(conn)
+            progress = labelling_progress(conn)
+    except (MissingSetting, DatabaseError, ConfigError) as exc:
+        _fatal(str(exc))
+        return
+
+    click.echo(
+        f"run #{run.id}: {report.written} candidate(s) written "
+        f"({report.skipped_existing} already present)\n"
+    )
+    click.echo("=" * 84)
+    click.echo("CANDIDATE POOL")
+    click.echo("=" * 84)
+    for r in summary:
+        click.echo(
+            f"  {r['sampling_stratum']!s:<16}{int(r['n']):>6}   "
+            f"{r['first_date']} .. {r['last_date']}"
+        )
+    total = sum(int(r["n"]) for r in summary)
+    click.echo(f"  {'TOTAL':<16}{total:>6}")
+    click.echo(
+        "\n  Stratum B exists so recall is computable. Annotators see the\n"
+        "  stratum-blind gt_labeling_queue view and cannot tell them apart."
+    )
+
+    click.echo()
+    click.echo("=" * 84)
+    click.echo("LABELLING PROGRESS")
+    click.echo("=" * 84)
+    if not progress:
+        click.echo(
+            click.style(
+                "  No labels yet. Two annotators must label independently before\n"
+                "  kappa, the ablation, or any M7 number can be computed.",
+                fg="yellow",
+            )
+        )
+    for r in progress:
+        pool = int(r["pool"]) or 1
+        done = int(r["labelled"])
+        click.echo(
+            f"  {r['annotator_code']!s:<10}{done:>5}/{pool}  ({done / pool * 100:5.1f}%)   "
+            f"anomali={int(r['anomali'])} normal={int(r['normal'])} ragu={int(r['ragu'])}"
+        )
+
+
+@cli.command("kappa")
+@click.option("--a", "annotator_a", default=None, help="First annotator code.")
+@click.option("--b", "annotator_b", default=None, help="Second annotator code.")
+def kappa_cmd(annotator_a: str | None, annotator_b: str | None) -> None:
+    """Cohen's kappa between two annotators — the M7 stop condition."""
+    from .config import load_analysis
+    from .evaluate.kappa import annotators, compute
+
+    try:
+        cfg = load_analysis()
+        with connect() as conn:
+            found = annotators(conn)
+            if len(found) < 2:
+                _fatal(
+                    f"need two annotators, found {found or 'none'}. "
+                    f"Kappa measures agreement; it cannot be computed from one person."
+                )
+                return
+            result = compute(conn, annotator_a or found[0], annotator_b or found[1])
+    except (MissingSetting, DatabaseError, ConfigError, ValueError) as exc:
+        _fatal(str(exc))
+        return
+
+    click.echo(f"  annotators      : {result.annotator_a} vs {result.annotator_b}")
+    click.echo(f"  paired labels   : {result.n_paired}")
+    click.echo(f"  observed agree  : {result.observed_agreement:.4f}")
+    click.echo(f"  expected agree  : {result.expected_agreement:.4f}")
+    passed = result.passes(cfg.evaluation.min_kappa)
+    click.echo(
+        "  Cohen's kappa   : "
+        + click.style(f"{result.kappa:.4f}", fg="green" if passed else "red")
+        + f"   ({result.interpretation})"
+    )
+    click.echo(f"  gate            : >= {cfg.evaluation.min_kappa}")
+
+    click.echo(f"\n  confusion (rows = {result.annotator_a}, cols = {result.annotator_b}):")
+    labels = ("anomali", "normal", "ragu")
+    click.echo("      " + "".join(f"{c:>10}" for c in labels))
+    for row_label in labels:
+        click.echo(
+            f"  {row_label:<8}" + "".join(f"{result.confusion[row_label][c]:>10}" for c in labels)
+        )
+
+    if result.disagreements:
+        click.echo(f"\n  {len(result.disagreements)} disagreement(s) for adjudication:")
+        for d in result.disagreements[:15]:
+            click.echo(
+                f"      #{d['candidate_id']:<5} {d['region']!s:<16}{d['commodity']!s:<22}"
+                f"{d['obs_date']}   {d[result.annotator_a]} / {d[result.annotator_b]}"
+            )
+
+    if not passed:
+        click.echo()
+        _fatal(
+            f"kappa {result.kappa:.4f} is below the {cfg.evaluation.min_kappa} gate.\n"
+            f"  The brief is explicit: do not proceed. The operational definition is\n"
+            f"  too ambiguous. Revise it, re-label, and report both rounds."
+        )
+
+
 if __name__ == "__main__":  # pragma: no cover
     cli()
