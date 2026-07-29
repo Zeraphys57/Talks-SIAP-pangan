@@ -428,5 +428,85 @@ def runs_cmd(limit: int, close_stale: float | None) -> None:
         )
 
 
+@cli.command("preprocess")
+@click.option("--disagreements", default=10, show_default=True, help="Widest spreads to print.")
+def preprocess_cmd(disagreements: int) -> None:
+    """Rebuild price_daily_unified from price_observations — the M2 gate output."""
+    from .preprocess import completeness_by_commodity, largest_disagreements, rebuild
+    from .runs import start_run
+
+    try:
+        with connect() as conn:
+            run = start_run(conn, "preprocess", params={"max_gap_days": 3})
+            status = "failed"
+            try:
+                report = rebuild(conn, run)
+                status = "success"
+            finally:
+                run.finish(status)
+            completeness = completeness_by_commodity(conn)
+            spreads = largest_disagreements(conn, disagreements)
+    except (MissingSetting, DatabaseError, ConfigError) as exc:
+        _fatal(str(exc))
+        return
+
+    click.echo("=" * 96)
+    click.echo("COMPLETENESS PER COMMODITY x REGION")
+    click.echo("=" * 96)
+    click.echo(
+        f"  {'region':<17}{'commodity':<24}{'days':>6}{'obs':>7}{'imp':>6}{'null':>6}"
+        f"{'src':>6}   complete"
+    )
+    for r in completeness:
+        days = int(r["days"])
+        filled = int(r["observed"]) + int(r["imputed"])
+        pct = filled / days * 100 if days else 0.0
+        colour = "green" if pct >= 95 else ("yellow" if pct >= 80 else "red")
+        click.echo(
+            f"  {r['region']!s:<17}{r['commodity']!s:<24}{days:>6}{int(r['observed']):>7}"
+            f"{int(r['imputed']):>6}{int(r['missing']):>6}{float(r['avg_sources']):>6.2f}   "
+            + click.style(f"{pct:5.1f}%", fg=colour)
+        )
+
+    click.echo()
+    click.echo("=" * 96)
+    click.echo(
+        f"OVERALL: {report.completeness_pct:.1f}% complete, "
+        f"{report.imputation_pct:.1f}% imputed, {report.rows_written:,} daily rows"
+    )
+    click.echo("=" * 96)
+
+    click.echo()
+    click.echo("=" * 96)
+    click.echo(f"{len(spreads)} LARGEST CROSS-SOURCE DISAGREEMENTS")
+    click.echo("  a 10x spread is a unit bug, not a market — check these by eye")
+    click.echo("=" * 96)
+    click.echo(
+        f"  {'region':<17}{'commodity':<24}{'date':<12}{'min':>11}{'max':>11}{'n':>3}  spread"
+    )
+    for r in spreads:
+        spread = float(r["source_spread_pct"])
+        spread_colour = "red" if spread >= 100 else ("yellow" if spread >= 30 else "")
+        text = f"{spread:6.1f}%"
+        click.echo(
+            f"  {r['region']!s:<17}{r['commodity']!s:<24}{r['obs_date']!s:<12}"
+            f"{float(r['price_min']):>11,.0f}{float(r['price_max']):>11,.0f}"
+            f"{int(r['n_sources']):>3}  "
+            + (click.style(text, fg=spread_colour) if spread_colour else text)
+        )
+    if not spreads:
+        click.echo("  (no day yet has more than one reporting source)")
+
+    if report.suspicious:
+        click.echo()
+        click.echo(
+            click.style(
+                f"  {len(report.suspicious)} day(s) exceeded the 100% spread threshold "
+                f"— see the run notes",
+                fg="red",
+            )
+        )
+
+
 if __name__ == "__main__":  # pragma: no cover
     cli()
