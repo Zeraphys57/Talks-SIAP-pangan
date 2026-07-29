@@ -3,7 +3,7 @@
 **Generated** by `siap preprocess --report`. Do not edit by hand — it is
 rebuilt from `price_daily_unified` and will be overwritten.
 
-Generated 2026-07-29 04:21 UTC, covering 2023-07-28 to 2026-07-29.
+Generated 2026-07-29 10:23 UTC, covering 2023-07-28 to 2026-07-29.
 
 ## Overall
 
@@ -25,48 +25,48 @@ ground-truth evaluation in M7.
 | `jogja` | 12 | 2026-07-28 | 2026-07-28 |
 | `pihps` | 28,116 | 2023-07-31 | 2026-07-28 |
 | `siskaperbapo` | 13,176 | 2023-07-28 | 2026-07-29 |
-| `sp2kp` | 23,021 | 2024-03-01 | 2026-07-28 |
+| `sp2kp` | 26,909 | 2024-03-01 | 2026-07-28 |
 
 ## Completeness per commodity x region
 
 | region | commodity | days | observed | imputed | missing | avg sources | complete |
 |---|---|---:|---:|---:|---:|---:|---:|
-| di_yogyakarta | beras-medium | 1,094 | 781 | 309 | 4 | 1.11 | 99.6% |
-| di_yogyakarta | beras-premium | 1,094 | 781 | 309 | 4 | 1.11 | 99.6% |
-| di_yogyakarta | cabai-merah-keriting | 1,094 | 781 | 309 | 4 | 1.11 | 99.6% |
-| di_yogyakarta | cabai-rawit-merah | 1,094 | 781 | 309 | 4 | 1.11 | 99.6% |
-| di_yogyakarta | bawang-merah | 1,094 | 781 | 309 | 4 | 1.11 | 99.6% |
-| di_yogyakarta | bawang-putih | 1,094 | 781 | 309 | 4 | 1.11 | 99.6% |
-| di_yogyakarta | telur-ayam-ras | 1,094 | 781 | 309 | 4 | 1.11 | 99.6% |
-| di_yogyakarta | daging-ayam-ras | 1,094 | 781 | 309 | 4 | 1.11 | 99.6% |
-| di_yogyakarta | daging-sapi | 1,094 | 781 | 309 | 4 | 1.11 | 99.6% |
-| di_yogyakarta | minyak-goreng-curah | 1,094 | 781 | 309 | 4 | 1.11 | 99.6% |
-| di_yogyakarta | minyak-goreng-kemasan | 1,094 | 781 | 309 | 4 | 1.11 | 99.6% |
-| di_yogyakarta | gula-pasir | 1,094 | 781 | 309 | 4 | 1.11 | 99.6% |
-| jawa_tengah | beras-medium | 1,094 | 789 | 305 | 0 | 1.13 | 100.0% |
-| jawa_tengah | beras-premium | 1,094 | 789 | 305 | 0 | 1.12 | 100.0% |
-| jawa_tengah | cabai-merah-keriting | 1,094 | 789 | 305 | 0 | 1.13 | 100.0% |
-| jawa_tengah | cabai-rawit-merah | 1,094 | 789 | 305 | 0 | 1.13 | 100.0% |
-| jawa_tengah | bawang-merah | 1,094 | 789 | 305 | 0 | 1.12 | 100.0% |
-| jawa_tengah | bawang-putih | 1,094 | 789 | 305 | 0 | 1.12 | 100.0% |
-| jawa_tengah | telur-ayam-ras | 1,094 | 789 | 305 | 0 | 1.12 | 100.0% |
-| jawa_tengah | daging-ayam-ras | 1,094 | 789 | 305 | 0 | 1.12 | 100.0% |
-| jawa_tengah | daging-sapi | 1,094 | 789 | 305 | 0 | 1.13 | 100.0% |
-| jawa_tengah | minyak-goreng-curah | 1,094 | 789 | 305 | 0 | 1.12 | 100.0% |
-| jawa_tengah | minyak-goreng-kemasan | 1,094 | 789 | 305 | 0 | 1.13 | 100.0% |
-| jawa_tengah | gula-pasir | 1,094 | 789 | 305 | 0 | 1.12 | 100.0% |
-| jawa_timur | beras-medium | 1,098 | 1,098 | 0 | 0 | 2.12 | 100.0% |
-| jawa_timur | beras-premium | 1,098 | 1,098 | 0 | 0 | 2.12 | 100.0% |
-| jawa_timur | cabai-merah-keriting | 1,098 | 1,098 | 0 | 0 | 2.11 | 100.0% |
-| jawa_timur | cabai-rawit-merah | 1,098 | 1,098 | 0 | 0 | 2.12 | 100.0% |
-| jawa_timur | bawang-merah | 1,098 | 1,098 | 0 | 0 | 2.12 | 100.0% |
-| jawa_timur | bawang-putih | 1,098 | 1,098 | 0 | 0 | 2.12 | 100.0% |
-| jawa_timur | telur-ayam-ras | 1,098 | 1,098 | 0 | 0 | 2.12 | 100.0% |
-| jawa_timur | daging-ayam-ras | 1,098 | 1,098 | 0 | 0 | 2.12 | 100.0% |
-| jawa_timur | daging-sapi | 1,098 | 1,098 | 0 | 0 | 2.12 | 100.0% |
-| jawa_timur | minyak-goreng-curah | 1,098 | 1,098 | 0 | 0 | 2.11 | 100.0% |
-| jawa_timur | minyak-goreng-kemasan | 1,098 | 1,098 | 0 | 0 | 2.12 | 100.0% |
-| jawa_timur | gula-pasir | 1,098 | 1,098 | 0 | 0 | 2.11 | 100.0% |
+| di_yogyakarta | beras-medium | 1,094 | 781 | 309 | 4 | 1.21 | 99.6% |
+| di_yogyakarta | beras-premium | 1,094 | 781 | 309 | 4 | 1.21 | 99.6% |
+| di_yogyakarta | cabai-merah-keriting | 1,094 | 781 | 309 | 4 | 1.21 | 99.6% |
+| di_yogyakarta | cabai-rawit-merah | 1,094 | 781 | 309 | 4 | 1.21 | 99.6% |
+| di_yogyakarta | bawang-merah | 1,094 | 781 | 309 | 4 | 1.21 | 99.6% |
+| di_yogyakarta | bawang-putih | 1,094 | 781 | 309 | 4 | 1.21 | 99.6% |
+| di_yogyakarta | telur-ayam-ras | 1,094 | 781 | 309 | 4 | 1.21 | 99.6% |
+| di_yogyakarta | daging-ayam-ras | 1,094 | 781 | 309 | 4 | 1.21 | 99.6% |
+| di_yogyakarta | daging-sapi | 1,094 | 781 | 309 | 4 | 1.21 | 99.6% |
+| di_yogyakarta | minyak-goreng-curah | 1,094 | 781 | 309 | 4 | 1.21 | 99.6% |
+| di_yogyakarta | minyak-goreng-kemasan | 1,094 | 781 | 309 | 4 | 1.21 | 99.6% |
+| di_yogyakarta | gula-pasir | 1,094 | 781 | 309 | 4 | 1.21 | 99.6% |
+| jawa_tengah | beras-medium | 1,094 | 789 | 305 | 0 | 1.23 | 100.0% |
+| jawa_tengah | beras-premium | 1,094 | 789 | 305 | 0 | 1.22 | 100.0% |
+| jawa_tengah | cabai-merah-keriting | 1,094 | 789 | 305 | 0 | 1.22 | 100.0% |
+| jawa_tengah | cabai-rawit-merah | 1,094 | 789 | 305 | 0 | 1.23 | 100.0% |
+| jawa_tengah | bawang-merah | 1,094 | 789 | 305 | 0 | 1.22 | 100.0% |
+| jawa_tengah | bawang-putih | 1,094 | 789 | 305 | 0 | 1.22 | 100.0% |
+| jawa_tengah | telur-ayam-ras | 1,094 | 789 | 305 | 0 | 1.22 | 100.0% |
+| jawa_tengah | daging-ayam-ras | 1,094 | 789 | 305 | 0 | 1.22 | 100.0% |
+| jawa_tengah | daging-sapi | 1,094 | 789 | 305 | 0 | 1.22 | 100.0% |
+| jawa_tengah | minyak-goreng-curah | 1,094 | 789 | 305 | 0 | 1.22 | 100.0% |
+| jawa_tengah | minyak-goreng-kemasan | 1,094 | 789 | 305 | 0 | 1.22 | 100.0% |
+| jawa_tengah | gula-pasir | 1,094 | 789 | 305 | 0 | 1.22 | 100.0% |
+| jawa_timur | beras-medium | 1,098 | 1,098 | 0 | 0 | 2.22 | 100.0% |
+| jawa_timur | beras-premium | 1,098 | 1,098 | 0 | 0 | 2.21 | 100.0% |
+| jawa_timur | cabai-merah-keriting | 1,098 | 1,098 | 0 | 0 | 2.21 | 100.0% |
+| jawa_timur | cabai-rawit-merah | 1,098 | 1,098 | 0 | 0 | 2.22 | 100.0% |
+| jawa_timur | bawang-merah | 1,098 | 1,098 | 0 | 0 | 2.21 | 100.0% |
+| jawa_timur | bawang-putih | 1,098 | 1,098 | 0 | 0 | 2.21 | 100.0% |
+| jawa_timur | telur-ayam-ras | 1,098 | 1,098 | 0 | 0 | 2.21 | 100.0% |
+| jawa_timur | daging-ayam-ras | 1,098 | 1,098 | 0 | 0 | 2.21 | 100.0% |
+| jawa_timur | daging-sapi | 1,098 | 1,098 | 0 | 0 | 2.21 | 100.0% |
+| jawa_timur | minyak-goreng-curah | 1,098 | 1,098 | 0 | 0 | 2.21 | 100.0% |
+| jawa_timur | minyak-goreng-kemasan | 1,098 | 1,098 | 0 | 0 | 2.22 | 100.0% |
+| jawa_timur | gula-pasir | 1,098 | 1,098 | 0 | 0 | 2.21 | 100.0% |
 | kota_yogyakarta | beras-medium | 1 | 1 | 0 | 0 | 1.00 | 100.0% |
 | kota_yogyakarta | beras-premium | 1 | 1 | 0 | 0 | 1.00 | 100.0% |
 | kota_yogyakarta | cabai-merah-keriting | 1 | 1 | 0 | 0 | 1.00 | 100.0% |

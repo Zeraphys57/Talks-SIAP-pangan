@@ -37,6 +37,8 @@ dependencies = [
     "scikit-learn>=1.5",     # IsolationForest, StandardScaler, KMeans (M4)
     # M5 — seasonal decomposition
     "statsmodels>=0.14",     # STL
+    # M7 — paper exports
+    "matplotlib>=3.9",       # figures only; the Agg backend is forced in export/
 ]
 
 [project.optional-dependencies]

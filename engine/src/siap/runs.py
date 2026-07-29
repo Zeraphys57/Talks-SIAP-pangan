@@ -144,7 +144,10 @@ def close_stale(conn: Conn, older_than_hours: float = 6.0) -> list[int]:
                        || %s || ' hour(s). The process did not finish, so any rows it '
                        || 'wrote are partial.')
              where status = 'running'
-               and started_at < now() - make_interval(hours => %s)
+               -- Multiplying an interval rather than make_interval(hours => ...),
+               -- which takes int4 and rejects the fractional hours this
+               -- signature accepts.
+               and started_at < now() - (%s * interval '1 hour')
             returning id
             """,
             (older_than_hours, older_than_hours),

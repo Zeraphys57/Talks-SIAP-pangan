@@ -6,6 +6,122 @@ reason, so they can be defended rather than discovered.
 
 ---
 
+## M7 — Evaluation harness (2026-07-29)
+
+Candidate pool, Cohen's kappa, four-arm matching, the label-free parameter
+sweeps, the paper exports and the `/lab` labelling console. **The headline M7
+numbers do not exist yet and were not estimated**: kappa and the four-arm
+precision/recall need two people to label 399 candidates, and inventing labels
+is the one thing this project must never do. `siap kappa` currently answers
+*"need two annotators, found none"*.
+
+### A blocking data defect, found by looking at the qualitative figure
+
+`fig_series_beras_medium_jawa_tengah` showed five identical one-day spikes to
+the same price, at roughly monthly intervals, each returning to exactly the
+prior level. Staple prices do not do that. The cause:
+
+| | pihps | sp2kp |
+|---|---:|---:|
+| beras-medium / jawa\_tengah, 2026 | mean 15,691 (sd 118) | mean 13,257 (sd 65) |
+
+The two sources sit **18% apart** and each is internally stable. They measure
+different things — PIHPS samples traditional-market retail, SP2KP is Kemendag's
+own panel — so the gap is real, not a parsing bug. Across the whole dataset the
+systematic offsets are:
+
+| pair | overlapping days | mean ratio | sd |
+|---|---:|---:|---:|
+| pihps / sp2kp | 19,644 | 1.0516 | 0.0786 |
+| pihps / siskaperbapo | 9,384 | 1.0384 | 0.0623 |
+| siskaperbapo / sp2kp | 6,615 | 1.0060 | 0.0260 |
+
+`price_daily_unified.price_median` is a median across *whichever sources
+reported that day*. When membership changes, the series steps by the offset
+between them. That step is not a price movement, and the detectors cannot tell
+the difference:
+
+* 36 of 60 series have a varying source count;
+* 6,399 of 39,077 series-days (16.4%) differ in `n_sources` from the day before;
+* **938 of 1,897 daily moves above 5% (49.4%) coincide with a composition
+  change**;
+* 673 of 2,979 Z-Score flags (22.6%) sit on one;
+* **75 of the 399 ground-truth candidates (18.8%) sit on one.**
+
+The z = 99.03 flag on 2026-03-23 is exactly this: sp2kp did not report, so the
+"median" became pihps alone.
+
+**Nothing was changed.** Fixing this means altering what `preprocess` computes,
+which is M2 — a milestone already verified — and the choice between rebasing
+sources to a reference level, restricting each series to a fixed source set, or
+flagging and excluding composition-change days is a research-design decision
+with different consequences for the paper. Per the brief's rule on specs meeting
+reality, it is reported rather than improvised around. It is also **blocking**:
+the pool is drawn and the fix would change which days belong in it, so it should
+be settled before anyone labels, not after.
+
+### The pool was redrawn once, deliberately
+
+The SP2KP provincial backfill finished during M7, taking sp2kp from
+national-only to all four regions (26,909 observations). Every downstream
+artefact was stale, so preprocess -> analyze -> cluster -> seasonal -> fuse were
+re-run (runs #37-#41) and the pool re-sampled from the complete data (run #42).
+
+`siap gt-pool --redraw` refuses once any label exists. Redrawing is legitimate
+exactly once — before anyone has judged anything. After that the pool is what
+the labels are a sample of, and replacing it would silently change what every
+downstream number is a statement about.
+
+### `/lab`, and a hole the RLS posture left
+
+0006 gave `authenticated` INSERT on `gt_labels` and no SELECT, so one annotator
+cannot read the other's judgements. Correct, and kept — but it also left the UI
+unable to answer "which have I already done?", which over 399 items matters.
+
+0007 adds `lab_annotators` plus three SECURITY DEFINER functions scoped to the
+caller's own code, derived from `auth.uid()` rather than passed in. That is
+strictly narrower than granting SELECT, and it closes something 0006 left open:
+any signed-in team member could previously have written labels attributed to
+`A2`. Independence of the two label sets is the premise of kappa, so it belongs
+in the schema rather than in UI discipline.
+
+`siap lab-check` attacks the model from the client side — becomes each
+annotator, tries to read the pool, read the other's labels, and write under
+their code, then rolls everything back. It caught a real hole: Supabase's
+default privileges grant EXECUTE on new functions to `anon` explicitly, and
+`revoke ... from public` does not remove an explicit grant. Measured impact was
+nil (both functions gate on `auth.uid()`, which is NULL for anon, so both
+returned zero rows), but 0008 removes the grant anyway. All 14 attempts now
+behave as required.
+
+### What the label-free sweeps actually showed
+
+Precision and recall need labels. How the output *moves* does not, so those
+sweeps ran:
+
+* **Contamination is a cut depth, not a model choice.** The flag sets are
+  strictly nested — every day flagged at 0.01 is flagged at 0.03, and every day
+  at 0.03 is flagged at 0.05 (verified, not assumed). Choosing 0.03 decides how
+  many alerts a warung owner is asked to attend to; it does not change which
+  days rank as unusual.
+* **The demand weight is inert, not robust.** Perturbing it gives Spearman
+  exactly 1.0000 — because Google Trends is throttled to zero, `D = 0` on every
+  scored day, and the weight only rescales the score against fixed thresholds.
+  Reported as inert, because a perfect rank correlation here reads as
+  reassurance and means the opposite. The level counts still move sharply
+  (merah 1,406 vs 94), which is the same fact seen from the other side.
+* k = 2 still scores highest on silhouette (0.7844 vs 0.6486) and still cannot
+  be selected. The figure plots it rather than dropping it, since the constraint
+  is editorial.
+
+### Also fixed
+
+`siap runs --close-stale` had never worked: `make_interval(hours => ...)` takes
+`int4` and the parameter is a float, so it raised `UndefinedFunction` every
+time. Now multiplies `interval '1 hour'`. Closed abandoned runs #17 and #18.
+
+---
+
 ## M5 — Seasonality (2026-07-29)
 
 STL at weekly resolution, `period=52`, `seasonal=13`, `robust=True`.

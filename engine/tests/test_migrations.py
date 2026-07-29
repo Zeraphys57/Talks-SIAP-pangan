@@ -144,3 +144,51 @@ def test_discover_rejects_unrecognised_filenames(tmp_path) -> None:
     (tmp_path / "notes.sql").write_text("select 2;", encoding="utf-8")
     with pytest.raises(MigrationError, match="unrecognised"):
         discover(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# The /lab access model (0007, 0008)
+# ---------------------------------------------------------------------------
+def test_label_inserts_are_scoped_to_the_signed_in_annotator(all_sql: str) -> None:
+    """Cohen's kappa assumes two independent label sets.
+
+    If any signed-in team member could insert rows attributed to 'A2', that
+    independence would rest on nobody having tried.
+    """
+    match = re.search(
+        r"alter\s+policy\s+\"lab_insert_gt_labels\"[^;]+;", all_sql, re.IGNORECASE | re.S
+    )
+    assert match, "the gt_labels insert policy is never scoped to the caller"
+    assert "current_annotator_code" in match.group(0)
+
+
+def test_lab_functions_are_revoked_from_anon(all_sql: str) -> None:
+    """Supabase's default privileges grant EXECUTE to anon explicitly.
+
+    `revoke ... from public` does not remove an explicit grant, which is how
+    0007 shipped a reachable function and `siap lab-check` caught it.
+    """
+    for function in ("current_annotator_code()", "lab_queue(integer)", "lab_progress()"):
+        assert re.search(
+            rf"revoke\s+all\s+on\s+function\s+public\.{re.escape(function)}\s+from\s+anon",
+            all_sql,
+            re.IGNORECASE,
+        ), f"{function} is never revoked from anon"
+
+
+def test_the_queue_function_reads_the_blind_view_not_the_pool(all_sql: str) -> None:
+    """Structural blinding: the source has no sampling_stratum column to leak."""
+    match = re.search(
+        r"create\s+or\s+replace\s+function\s+public\.lab_queue.*?\$\$(.*?)\$\$",
+        all_sql,
+        re.IGNORECASE | re.S,
+    )
+    assert match, "lab_queue is not defined"
+    body = match.group(1)
+    assert "gt_labeling_queue" in body
+    assert "gt_candidates" not in body, "lab_queue reads the unblinded pool directly"
+
+
+def test_annotator_codes_are_pseudonymous(all_sql: str) -> None:
+    """The code appears in the paper; it must not be someone's name."""
+    assert "lab_annotators_code_is_pseudonymous" in all_sql

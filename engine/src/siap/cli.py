@@ -11,13 +11,14 @@ gate that cannot be verified.
 from __future__ import annotations
 
 import sys
+import textwrap
 from datetime import date, datetime
 
 import click
 
 from . import __version__
 from .config import ConfigError, load_reference
-from .db import DatabaseError, connect, server_version
+from .db import DatabaseError, connect, fetch_all, fetch_value, server_version
 from .doctor import run_all
 from .migrate import MigrationError, apply_all, status
 from .paths import repo_root
@@ -31,6 +32,11 @@ BAD = " FAIL "
 def _fatal(message: str) -> None:
     click.echo(click.style(f"\n{message}\n", fg="red"), err=True)
     sys.exit(1)
+
+
+def _wrap(text: str, width: int = 78) -> list[str]:
+    """Wrap a note for the fixed-width gate output."""
+    return textwrap.wrap(text, width=width) or [""]
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -144,6 +150,118 @@ def seed_cmd() -> None:
 
 
 # ---------------------------------------------------------------------------
+@cli.command("lab-annotator")
+@click.option("--email", help="Email of an existing Supabase Auth user.")
+@click.option("--code", help="Pseudonymous annotator code, e.g. A1.")
+def lab_annotator_cmd(email: str | None, code: str | None) -> None:
+    """List annotators, or register an existing auth user as one.
+
+    Accounts themselves are created by the coordinator in the Supabase
+    dashboard; this only maps an existing user to a pseudonymous code. Passwords
+    never pass through this tool.
+    """
+    try:
+        with connect() as conn:
+            if not email and not code:
+                rows = fetch_all(
+                    conn,
+                    """
+                    select la.annotator_code, la.display_name, u.email, la.created_at
+                      from public.lab_annotators la
+                      left join auth.users u on u.id = la.user_id
+                     order by la.annotator_code
+                    """,
+                )
+                if not rows:
+                    click.echo(
+                        "  no annotators registered.\n\n"
+                        "  1. Supabase dashboard -> Authentication -> Users -> Add user\n"
+                        "  2. siap lab-annotator --email <their email> --code A1\n"
+                    )
+                    return
+                for r in rows:
+                    who = str(r["email"] or "(user deleted)")
+                    code_shown = str(r["annotator_code"])
+                    click.echo(f"  {code_shown:<6} {who:<34} registered {r['created_at']:%Y-%m-%d}")
+                return
+
+            if not (email and code):
+                _fatal("--email and --code must be given together")
+                return
+
+            user_id = fetch_value(conn, "select id from auth.users where email = %s", (email,))
+            if user_id is None:
+                _fatal(
+                    f"no Supabase Auth user with email {email!r}. Create the account first "
+                    f"(dashboard -> Authentication -> Users -> Add user), then re-run this."
+                )
+                return
+
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    insert into public.lab_annotators (user_id, annotator_code, display_name)
+                    values (%s, %s, %s)
+                    on conflict (user_id) do update set annotator_code = excluded.annotator_code
+                    """,
+                    (user_id, code, email.split("@")[0]),
+                )
+            conn.commit()
+    except (MissingSetting, DatabaseError) as exc:
+        _fatal(str(exc))
+        return
+
+    click.echo(f"  {email} is now annotator {code}")
+    click.echo(
+        "\n  Remind them: work alone, and do not discuss candidates with the other\n"
+        "  annotator until both lists are finished. Kappa only means something if\n"
+        "  the two judgements are independent."
+    )
+
+
+@cli.command("lab-check")
+def lab_check_cmd() -> None:
+    """Attack the /lab access model as an annotator, then roll back.
+
+    Verifies from the client side what `doctor` verifies from the catalog: that
+    one annotator cannot read the other's labels, write under their code, or
+    tell which stratum a candidate came from.
+    """
+    from .labcheck import run as run_lab_check
+
+    try:
+        with connect() as conn:
+            click.echo(f"database: {redact_dsn(database_url())}\n")
+            report = run_lab_check(conn)
+    except (MissingSetting, DatabaseError) as exc:
+        _fatal(str(exc))
+        return
+
+    for attempt in report.attempts:
+        marker = click.style(OK, fg="green") if attempt.ok else click.style(BAD, fg="red")
+        click.echo(f"[{marker}] {attempt.name}")
+        click.echo(f"         {attempt.detail}")
+
+    click.echo()
+    if report.ok:
+        click.echo(
+            click.style(
+                f"{len(report.attempts)} attempt(s) behaved as required. "
+                "Fixture rows were rolled back.",
+                fg="green",
+            )
+        )
+    else:
+        click.echo(
+            click.style(
+                f"{len(report.failures)} of {len(report.attempts)} FAILED. "
+                "Do not begin labelling: the two label sets would not be independent.",
+                fg="red",
+            )
+        )
+        sys.exit(1)
+
+
 @cli.command("doctor")
 def doctor_cmd() -> None:
     """Verify schema completeness, RLS posture and seeded reference data."""
@@ -798,12 +916,33 @@ def fuse_cmd(board: int) -> None:
 
 
 @cli.command("gt-pool")
-def gt_pool_cmd() -> None:
+@click.option(
+    "--refresh-context",
+    is_flag=True,
+    help="Rebuild the evidence blob of existing candidates. Membership is untouched.",
+)
+@click.option(
+    "--redraw",
+    is_flag=True,
+    help="Discard and re-sample the pool. Refuses once any label exists.",
+)
+def gt_pool_cmd(refresh_context: bool, redraw: bool) -> None:
     """Generate the stratified ground-truth candidate pool (§7.1)."""
     from .config import load_analysis
-    from .evaluate.groundtruth import generate_pool, labelling_progress, pool_summary
+    from .evaluate.groundtruth import clear_pool, generate_pool, labelling_progress, pool_summary
+    from .evaluate.groundtruth import refresh_context as refresh_candidate_context
     from .fuse import latest_anomaly_run
     from .runs import start_run
+
+    if refresh_context:
+        try:
+            with connect() as conn:
+                updated = refresh_candidate_context(conn)
+        except (MissingSetting, DatabaseError) as exc:
+            _fatal(str(exc))
+            return
+        click.echo(f"  context rebuilt for {updated} candidate(s); pool membership unchanged")
+        return
 
     try:
         cfg = load_analysis()
@@ -812,6 +951,9 @@ def gt_pool_cmd() -> None:
             if anomaly_run is None:
                 _fatal("no completed anomaly run; run `siap analyze` first")
                 return
+            if redraw:
+                removed = clear_pool(conn)
+                click.echo(f"  discarded {removed} candidate(s); re-sampling\n")
             run = start_run(
                 conn,
                 "gt_pool",
@@ -873,6 +1015,193 @@ def gt_pool_cmd() -> None:
             f"  {r['annotator_code']!s:<10}{done:>5}/{pool}  ({done / pool * 100:5.1f}%)   "
             f"anomali={int(r['anomali'])} normal={int(r['normal'])} ragu={int(r['ragu'])}"
         )
+
+
+@cli.command("ablate")
+def ablate_cmd() -> None:
+    """Parameter sensitivity for the paper (§7.5).
+
+    Runs the sweeps that need no labels: k against silhouette, contamination
+    against flag volume and overlap, and fusion weights against ranking
+    stability. Per-setting precision and recall need adjudicated events and are
+    refused until they exist.
+    """
+    from .config import load_analysis, load_fusion
+    from .evaluate.ablation import nesting_note
+    from .evaluate.ablation import run as run_ablation
+    from .fuse import latest_anomaly_run
+    from .runs import start_run
+
+    try:
+        cfg, fcfg = load_analysis(), load_fusion()
+        with connect() as conn:
+            anomaly_run = latest_anomaly_run(conn)
+            if anomaly_run is None:
+                _fatal("no completed anomaly run; run `siap analyze` first")
+                return
+            run = start_run(
+                conn,
+                "ablation",
+                seed=cfg.seed,
+                params={"anomaly_run": anomaly_run},
+            )
+            status = "failed"
+            try:
+                report = run_ablation(conn, anomaly_run, cfg, fcfg)
+                report.run_id = run.id
+                run.note(
+                    f"k curve {len(report.k_points)} point(s); "
+                    f"contamination {len(report.contamination_points)} setting(s); "
+                    f"weight perturbations {len(report.weight_points)}"
+                )
+                if not report.accuracy_available:
+                    run.note(
+                        "per-setting accuracy NOT computed: " + report.accuracy_blocked_because
+                    )
+                status = "success"
+            finally:
+                run.finish(status)
+    except (MissingSetting, DatabaseError, ConfigError, ValueError) as exc:
+        _fatal(str(exc))
+        return
+
+    click.echo("=" * 84)
+    click.echo("K vs SILHOUETTE")
+    click.echo("=" * 84)
+    click.echo(f"  {'k':>3}  {'silhouette':>11}  {'inertia':>12}  note")
+    for point in report.k_points:
+        note = "SELECTED" if point.selected else ("" if point.eligible else "below k_select_min")
+        click.echo(f"  {point.k:>3}  {point.silhouette:>11.4f}  {point.inertia:>12.2f}  {note}")
+
+    click.echo()
+    click.echo("=" * 84)
+    click.echo("ISOLATIONFOREST CONTAMINATION")
+    click.echo("=" * 84)
+    click.echo(
+        f"  {'contam':>7}  {'series':>7}  {'days':>8}  {'flagged':>8}  "
+        f"{'rate':>7}  {'Jaccard vs base':>16}"
+    )
+    for cpoint in report.contamination_points:
+        marker = "  <- configured" if cpoint.is_baseline else ""
+        click.echo(
+            f"  {cpoint.contamination:>7.2f}  {cpoint.series_scored:>7}  "
+            f"{cpoint.days_scored:>8}  {cpoint.days_flagged:>8}  "
+            f"{cpoint.flag_rate:>7.3f}  {cpoint.jaccard_vs_baseline:>16.3f}{marker}"
+        )
+    note = nesting_note(report.contamination_points)
+    if note:
+        click.echo()
+        for line in _wrap(note):
+            click.echo(f"  {line}")
+
+    click.echo()
+    click.echo("=" * 84)
+    click.echo("FUSION WEIGHT SENSITIVITY")
+    click.echo("=" * 84)
+    base = report.weight_baseline
+    if base is not None:
+        click.echo(
+            f"  baseline: {base.n_scored} scored, "
+            f"merah={base.merah} kuning={base.kuning} hijau={base.hijau}"
+        )
+    click.echo(
+        f"\n  {'weight':<14} {'delta':>6} {'value':>6} {'spearman':>9} "
+        f"{'lvl changed':>12} {'merah':>7} {'kuning':>7}"
+    )
+    for wpoint in report.weight_points:
+        if not wpoint.ok:
+            click.echo(
+                f"  {wpoint.weight:<14} {wpoint.delta:>+6.2f} {'skipped':>6}  {wpoint.skipped}"
+            )
+            continue
+        flag = "  (*)" if wpoint.inert_because else ""
+        click.echo(
+            f"  {wpoint.weight:<14} {wpoint.delta:>+6.2f} {wpoint.value:>6.2f} "
+            f"{wpoint.spearman:>9.4f} {wpoint.level_changes:>12} "
+            f"{wpoint.merah:>7} {wpoint.kuning:>7}{flag}"
+        )
+
+    inert = {p.weight: p.inert_because for p in report.weight_points if p.inert_because}
+    for weight, why in inert.items():
+        click.echo()
+        click.echo(click.style(f"  (*) {weight}: ", fg="yellow"), nl=False)
+        click.echo(why)
+
+    click.echo()
+    if report.accuracy_available:
+        click.echo("  gt_events present: per-setting accuracy can now be added to this sweep.")
+    else:
+        click.echo(click.style("  PER-SETTING ACCURACY NOT COMPUTED", fg="yellow"))
+        for line in report.accuracy_blocked_because.split(". "):
+            if line.strip():
+                click.echo(f"    {line.strip().rstrip('.')}.")
+
+
+@cli.command("export")
+@click.option(
+    "--out",
+    "out_dir",
+    default=None,
+    help="Output directory. Defaults to paper-exports/ at the repository root.",
+)
+def export_cmd(out_dir: str | None) -> None:
+    """Write figures and tables for the paper into paper-exports/."""
+    from pathlib import Path
+
+    from .config import load_analysis, load_fusion
+    from .evaluate.ablation import run as run_ablation
+    from .export import run_export
+    from .fuse import latest_anomaly_run
+
+    directory = Path(out_dir) if out_dir else repo_root() / "paper-exports"
+
+    try:
+        cfg, fcfg = load_analysis(), load_fusion()
+        with connect() as conn:
+            anomaly_run = latest_anomaly_run(conn)
+            if anomaly_run is None:
+                _fatal("no completed anomaly run; run `siap analyze` first")
+                return
+            cluster_run = fetch_value(
+                conn,
+                "select max(id) from public.analysis_runs "
+                "where run_type = 'cluster' and status = 'success'",
+            )
+            fusion_run = fetch_value(
+                conn,
+                "select max(id) from public.analysis_runs "
+                "where run_type = 'fusion' and status = 'success'",
+            )
+            click.echo("  running the sweeps the figures are drawn from...")
+            ablation = run_ablation(conn, anomaly_run, cfg, fcfg)
+            report = run_export(
+                conn,
+                directory,
+                anomaly_run,
+                None if cluster_run is None else int(cluster_run),
+                None if fusion_run is None else int(fusion_run),
+                ablation,
+                cfg,
+                fcfg,
+            )
+    except (MissingSetting, DatabaseError, ConfigError, ValueError) as exc:
+        _fatal(str(exc))
+        return
+
+    click.echo(f"\n  {directory}\n")
+    for spec in report.figures:
+        click.echo(f"    figure  {spec.slug}.pdf / .png")
+    for table in report.tables:
+        click.echo(f"    table   {table.slug}.csv / .tex   ({len(table.rows)} row(s))")
+    click.echo("    readme  README.md")
+
+    if report.skipped:
+        click.echo(click.style("\n  NOT EXPORTED", fg="yellow"))
+        for reason in report.skipped:
+            for index, line in enumerate(_wrap(reason, 74)):
+                click.echo(f"    {'- ' if index == 0 else '  '}{line}")
+
+    click.echo(f"\n  {len(report.files)} file(s) written.")
 
 
 @cli.command("kappa")

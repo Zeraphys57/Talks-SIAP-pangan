@@ -21,6 +21,27 @@ not the market.
 The `context` blob shows the surrounding price window and **never** contains
 model output. Showing an annotator the anomaly score would make the label a
 judgement about the model rather than independent evidence about the world.
+
+### What the context deliberately does include
+
+The operational definition (§7.2) is a change exceeding **+/-10% against the
+trailing 30-day mean, sustained two days**. An annotator cannot apply that rule
+without the trailing mean, so `context` carries it, and the window reaches 30
+days back rather than 14 so the persistence half of the rule is visible too.
+
+That is an input to the detector, not an output of it: the /lab chart draws a
++/-10% band around the mean and lets the annotator see how many days fall
+outside it. Withholding the arithmetic would not make the labels more
+independent, only noisier — and disagreement caused by mental arithmetic is
+disagreement kappa cannot distinguish from disagreement about the market.
+
+The judgement left to the human is the part that matters and cannot be coded:
+whether a move that clears the bar is a real market event or a data artefact,
+and whether anything in the world corroborates it.
+
+Neither quantity reveals the stratum. Stratum A fires on |z| > 1.5 or a 7-day
+change over 7%; the context shows a 30-day-mean deviation. Different baseline,
+different threshold, so blinding holds.
 """
 
 from __future__ import annotations
@@ -39,6 +60,20 @@ log = logging.getLogger(__name__)
 
 STRATUM_FLAGGED = "rule_flagged"
 STRATUM_CONTROL = "random_control"
+
+# Context window, in days either side of the candidate date. Backwards reaches
+# a full baseline period so the annotator can see what the trailing mean is made
+# of; forwards covers the two-day persistence test with room to spare.
+WINDOW_BEFORE = 30
+WINDOW_AFTER = 14
+
+# Trailing mean the operational definition is stated against.
+BASELINE_DAYS = 30
+BASELINE_MIN_OBS = 20
+
+# The threshold in the definition itself, carried in the blob so the UI band and
+# the paper cannot drift apart.
+DEFINITION_PCT = 0.10
 
 
 @dataclass
@@ -108,11 +143,29 @@ def _context(conn: Conn, commodity_id: int, region_id: int, obs_date: Any) -> di
         select obs_date, price_median, is_imputed, n_sources
           from public.price_daily_unified
          where commodity_id = %s and region_id = %s
-           and obs_date between %s - 14 and %s + 14
+           and obs_date between %s - %s and %s + %s
          order by obs_date
         """,
-        (commodity_id, region_id, obs_date, obs_date),
+        (commodity_id, region_id, obs_date, WINDOW_BEFORE, obs_date, WINDOW_AFTER),
     )
+
+    # Trailing mean over real observations only. Averaging in interpolated days
+    # would let a gap-filled stretch pull the baseline towards the very move
+    # being judged.
+    baseline = fetch_all(
+        conn,
+        """
+        select avg(price_median) as mean_price, count(*) as n
+          from public.price_daily_unified
+         where commodity_id = %s and region_id = %s
+           and obs_date between %s - %s and %s - 1
+           and price_median is not null and not is_imputed
+        """,
+        (commodity_id, region_id, obs_date, BASELINE_DAYS, obs_date),
+    )[0]
+    n_baseline = int(baseline["n"] or 0)
+    mean_price = float(baseline["mean_price"]) if n_baseline >= BASELINE_MIN_OBS else None
+
     return {
         "window": [
             {
@@ -123,6 +176,17 @@ def _context(conn: Conn, commodity_id: int, region_id: int, obs_date: Any) -> di
             }
             for r in window
         ],
+        "focus_date": str(obs_date),
+        "baseline": {
+            "days": BASELINE_DAYS,
+            "n_obs": n_baseline,
+            "min_obs": BASELINE_MIN_OBS,
+            # None when the trailing period is too sparse to average honestly.
+            # The UI then draws no band and says so, rather than drawing one
+            # around a mean of four days.
+            "mean_price": None if mean_price is None else round(mean_price, 2),
+        },
+        "definition_pct": DEFINITION_PCT,
     }
 
 
@@ -191,6 +255,53 @@ def generate_pool(
         conn.commit()
     report.written = len(payload)
     return report
+
+
+def clear_pool(conn: Conn) -> int:
+    """Discard the pool so it can be redrawn. Refuses once any label exists.
+
+    Redrawing is legitimate exactly once: when the pool was sampled from data
+    that has since grown, and nobody has labelled anything yet. After the first
+    label, the pool is the thing the labels are a sample of — replacing it would
+    silently change what every downstream number is a statement about, and no
+    amount of re-running would reveal that it had happened.
+    """
+    n_labels = int(fetch_all(conn, "select count(*) as n from public.gt_labels")[0]["n"])
+    if n_labels:
+        raise ValueError(
+            f"{n_labels} label(s) already exist. The pool is what those labels are a "
+            f"sample of and must not be redrawn. If the pool genuinely has to change, "
+            f"that is a new round: keep this one, report both, and say why in the paper."
+        )
+    with conn.cursor() as cur:
+        cur.execute("delete from public.gt_candidates")
+        removed = cur.rowcount
+    conn.commit()
+    return removed
+
+
+def refresh_context(conn: Conn) -> int:
+    """Recompute `context` for every existing candidate, in place.
+
+    Membership is untouched. Which rows are in the pool was decided once by the
+    seeded sampler and must stay decided: re-drawing it after labelling had
+    begun would silently change what the labels are a sample of. Only the
+    evidence shown alongside each row is rebuilt.
+    """
+    rows = fetch_all(
+        conn, "select id, commodity_id, region_id, obs_date from public.gt_candidates order by id"
+    )
+    updated = 0
+    for row in rows:
+        blob = _context(conn, int(row["commodity_id"]), int(row["region_id"]), row["obs_date"])
+        with conn.cursor() as cur:
+            cur.execute(
+                "update public.gt_candidates set context = %s where id = %s",
+                (Json(blob), int(row["id"])),
+            )
+        updated += 1
+    conn.commit()
+    return updated
 
 
 def pool_summary(conn: Conn) -> list[dict[str, Any]]:

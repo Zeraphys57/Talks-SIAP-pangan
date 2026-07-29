@@ -182,3 +182,49 @@ def test_dev_and_test_splits_are_distinguished() -> None:
     assert result.split == "dev"
     row = result.as_row(run_id=1)
     assert "dev" in row
+
+
+# ---------------------------------------------------------------------------
+# What the annotator is shown
+# ---------------------------------------------------------------------------
+def test_the_context_window_covers_the_baseline_the_definition_names() -> None:
+    """The rule is '10% against the trailing 30-day mean, sustained two days'.
+
+    A window that reached back only 14 days would show the annotator less than
+    the baseline they are asked to judge against.
+    """
+    from siap.evaluate.groundtruth import BASELINE_DAYS, WINDOW_AFTER, WINDOW_BEFORE
+
+    assert WINDOW_BEFORE >= BASELINE_DAYS
+    assert WINDOW_AFTER >= 2, "the persistence half of the definition must be visible"
+
+
+def test_the_definition_threshold_has_one_home() -> None:
+    """The band drawn in /lab and the number quoted in the paper are the same constant."""
+    from siap.evaluate.groundtruth import DEFINITION_PCT
+
+    assert DEFINITION_PCT == 0.10
+
+
+def test_the_baseline_is_refused_rather_than_estimated_from_too_little() -> None:
+    from siap.evaluate.groundtruth import BASELINE_DAYS, BASELINE_MIN_OBS
+
+    assert 0 < BASELINE_MIN_OBS <= BASELINE_DAYS
+    assert BASELINE_MIN_OBS >= 20, (
+        "a mean over a handful of days is not the baseline the definition names; "
+        "the UI must be able to say so instead of drawing a band around noise"
+    )
+
+
+def test_the_stratum_rule_and_the_shown_baseline_are_different_quantities() -> None:
+    """Blinding check.
+
+    Stratum A fires on a 7-day change over 7%; the annotator sees deviation from
+    a 30-day mean against a 10% bar. If these coincided, showing the context
+    would tell the annotator which stratum the candidate came from.
+    """
+    from siap.evaluate.groundtruth import BASELINE_DAYS, DEFINITION_PCT
+
+    params = load_analysis().evaluation
+    assert params.stratum_a_pct_change_7d != DEFINITION_PCT
+    assert BASELINE_DAYS != 7

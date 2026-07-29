@@ -56,7 +56,14 @@ TABLE_AUDIENCE: dict[str, Audience] = {
     "gt_events": Audience.LAB,
     "evaluation_results": Audience.LAB,
     "sus_responses": Audience.LAB,
+    # lab identity
+    "lab_annotators": Audience.ENGINE,  # reachable only via definer functions
 }
+
+# Definer functions the /lab console depends on. Each is scoped to the caller's
+# own annotator code, which is how gt_labels can stay unreadable while the UI
+# still knows what is left to do.
+LAB_FUNCTIONS = ("current_annotator_code", "lab_queue", "lab_progress")
 
 REFERENCE_TABLES = ("commodities", "regions", "sources", "source_regions")
 
@@ -194,6 +201,55 @@ def check_blind_queue_view(conn: Conn, report: DoctorReport) -> None:
     )
 
 
+def check_label_attribution(conn: Conn, report: DoctorReport) -> None:
+    """An annotator must not be able to submit labels under another's code.
+
+    Cohen's kappa assumes two independent label sets. If any signed-in team
+    member could write rows as 'A2', that assumption would rest on nobody
+    having tried, which is not a guarantee.
+    """
+    expression = fetch_value(
+        conn,
+        """
+        select with_check from pg_policies
+         where schemaname = 'public' and tablename = 'gt_labels'
+           and policyname = 'lab_insert_gt_labels'
+        """,
+    )
+    if expression is None:
+        report.add("blinding: label writes are attributed", False, "insert policy not found")
+    else:
+        scoped = "current_annotator_code" in str(expression)
+        report.add(
+            "blinding: label writes are attributed to the signed-in annotator",
+            scoped,
+            "insert policy compares annotator_code against auth.uid()"
+            if scoped
+            else f"insert policy is unscoped: with check ({expression})",
+        )
+
+    defined = {
+        str(r["proname"])
+        for r in fetch_all(
+            conn,
+            """
+            select p.proname
+              from pg_proc p
+              join pg_namespace n on n.oid = p.pronamespace
+             where n.nspname = 'public' and p.prosecdef
+            """,
+        )
+    }
+    missing = [f for f in LAB_FUNCTIONS if f not in defined]
+    report.add(
+        "lab: annotator-scoped functions exist",
+        not missing,
+        f"{', '.join(LAB_FUNCTIONS)} present"
+        if not missing
+        else f"missing SECURITY DEFINER function(s): {', '.join(missing)}",
+    )
+
+
 def check_reference_seeded(conn: Conn, report: DoctorReport) -> None:
     from .config import load_reference
 
@@ -290,6 +346,7 @@ def run_all(conn: Conn) -> DoctorReport:
     check_rls_enabled(conn, report)
     check_policy_posture(conn, report)
     check_blind_queue_view(conn, report)
+    check_label_attribution(conn, report)
     check_reference_seeded(conn, report)
     check_anon_access_live(report, conn)
     return report
