@@ -1361,6 +1361,19 @@ def kappa_cmd(annotator_a: str | None, annotator_b: str | None) -> None:
                     f"Kappa measures agreement; it cannot be computed from one person."
                 )
                 return
+            # Cohen's kappa is defined for exactly two raters. With three or more
+            # having labelled, picking the first two silently would report a
+            # number that quietly ignores somebody's work — and nothing in the
+            # output would say so.
+            if len(found) > 2 and not (annotator_a and annotator_b):
+                _fatal(
+                    f"{len(found)} annotators have labelled: {', '.join(found)}. "
+                    f"Cohen's kappa is defined for a pair, so name which two:\n"
+                    f"    siap kappa --a {found[0]} --b {found[1]}\n"
+                    f"If a third person is the adjudicator, they should be resolving "
+                    f"disagreements into gt_events rather than labelling blind."
+                )
+                return
             result = compute(conn, annotator_a or found[0], annotator_b or found[1])
     except (MissingSetting, DatabaseError, ConfigError, ValueError) as exc:
         _fatal(str(exc))
