@@ -338,6 +338,38 @@ higher-priced panel cannot drag the series, and records `source_spread_pct` so
 the disagreement stays visible rather than being averaged away. M2's gate
 inspects the ten largest disagreements for exactly this reason.
 
+### M2 finding: PIHPS goes flat while other sources move
+
+Inspecting the widest disagreements over the full backfill shows a consistent
+pattern. `cabai-merah-keriting`, `jawa_tengah`, April 2024:
+
+| date | pihps | sp2kp |
+|---|---:|---:|
+| 2024-04-08 | 36,850 | 47,485 |
+| 2024-04-09 | 36,900 | 48,364 |
+| **2024-04-10** | **36,650** | **60,000** |
+| 2024-04-11 | 36,650 | 56,667 |
+
+SP2KP tracks a chilli spike; PIHPS sits within 250 rupiah of itself for four
+days. The same shape appears in DI Yogyakarta in September 2024, where PIHPS is
+pinned at exactly 28,750 across several days while SP2KP moves each day.
+
+**These are not unit bugs.** The ratios are ~1.5x, not 10x or 0.91x, and both
+sources report consistent units. It is a survey-frequency difference: PIHPS
+appears to carry values forward between surveys of its small panel.
+
+**The consequence matters for M3, and is worth stating before anomaly detection
+is built.** With exactly two sources the median *is* the midpoint, so a source
+that goes flat carries a full 50% weight and damps a genuine spike by roughly
+half. That applies to `jawa_tengah` and `di_yogyakarta`, which have PIHPS and
+SP2KP only. `jawa_timur` has three sources and is protected; `nasional` and
+`kota_yogyakarta` have one each and are unaffected.
+
+Not acted on here — dropping or down-weighting a source is a modelling decision,
+not a preprocessing one, and it belongs with the evidence from M3's detector
+comparison. Recorded so the effect is not rediscovered as a mysterious loss of
+sensitivity.
+
 ---
 
 ## jogja — Pemkot Yogyakarta ✅ implemented, forward-only
