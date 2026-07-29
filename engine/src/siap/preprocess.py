@@ -35,10 +35,12 @@ from __future__ import annotations
 import logging
 import statistics
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from .db import Conn, fetch_all
+from .paths import docs_dir
 from .runs import Run
 
 log = logging.getLogger(__name__)
@@ -307,6 +309,112 @@ def largest_disagreements(conn: Conn, limit: int = 10) -> list[dict[str, Any]]:
         """,
         (limit,),
     )
+
+
+def write_data_quality_report(conn: Conn, path: Path | None = None) -> Path:
+    """Generate docs/data-quality.md from the database.
+
+    Generated rather than hand-written so it cannot drift from the data it
+    describes, and so `make paper` in M9 can regenerate it from a clean clone.
+    """
+    target = path or (docs_dir() / "data-quality.md")
+    rows = completeness_by_commodity(conn)
+    spreads = largest_disagreements(conn, 15)
+
+    totals = fetch_all(
+        conn,
+        """
+        select count(*) as days,
+               count(*) filter (where price_median is not null and not is_imputed) as observed,
+               count(*) filter (where is_imputed) as imputed,
+               count(*) filter (where price_median is null) as missing,
+               min(obs_date) as first_date, max(obs_date) as last_date
+          from public.price_daily_unified
+        """,
+    )[0]
+
+    per_source = fetch_all(
+        conn,
+        """
+        select s.slug as source, count(*) as rows_n,
+               min(o.obs_date) as first_date, max(o.obs_date) as last_date
+          from public.price_observations o
+          join public.sources s on s.id = o.source_id
+         group by s.slug order by s.slug
+        """,
+    )
+
+    days = int(totals["days"]) or 1
+    lines: list[str] = [
+        "# Data quality report",
+        "",
+        "**Generated** by `siap preprocess --report`. Do not edit by hand — it is",
+        "rebuilt from `price_daily_unified` and will be overwritten.",
+        "",
+        f"Generated {datetime.now(UTC):%Y-%m-%d %H:%M} UTC, covering "
+        f"{totals['first_date']} to {totals['last_date']}.",
+        "",
+        "## Overall",
+        "",
+        "| metric | value |",
+        "|---|---:|",
+        f"| daily rows | {int(totals['days']):,} |",
+        f"| observed | {int(totals['observed']):,} ({int(totals['observed']) / days * 100:.1f}%) |",
+        f"| imputed | {int(totals['imputed']):,} ({int(totals['imputed']) / days * 100:.1f}%) |",
+        f"| still missing | {int(totals['missing']):,} "
+        f"({int(totals['missing']) / days * 100:.1f}%) |",
+        "",
+        "Imputation is linear and capped at three consecutive days. Longer gaps",
+        "stay NULL. Every imputed row is flagged `is_imputed` and is excluded from",
+        "ground-truth evaluation in M7.",
+        "",
+        "## Contributing sources",
+        "",
+        "| source | observations | first | last |",
+        "|---|---:|---|---|",
+    ]
+    lines += [
+        f"| `{r['source']}` | {int(r['rows_n']):,} | {r['first_date']} | {r['last_date']} |"
+        for r in per_source
+    ]
+
+    lines += [
+        "",
+        "## Completeness per commodity x region",
+        "",
+        "| region | commodity | days | observed | imputed | missing | avg sources | complete |",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for r in rows:
+        n = int(r["days"]) or 1
+        filled = int(r["observed"]) + int(r["imputed"])
+        lines.append(
+            f"| {r['region']} | {r['commodity']} | {n:,} | {int(r['observed']):,} | "
+            f"{int(r['imputed']):,} | {int(r['missing']):,} | {float(r['avg_sources']):.2f} | "
+            f"{filled / n * 100:.1f}% |"
+        )
+
+    lines += [
+        "",
+        "## Largest cross-source disagreements",
+        "",
+        "A spread of a factor of ten is a unit-conversion bug, not a market. These",
+        "are the widest observed, for inspection at the M2 gate.",
+        "",
+        "| region | commodity | date | min | max | sources | spread |",
+        "|---|---|---|---:|---:|---:|---:|",
+    ]
+    lines += [
+        f"| {r['region']} | {r['commodity']} | {r['obs_date']} | "
+        f"{float(r['price_min']):,.0f} | {float(r['price_max']):,.0f} | "
+        f"{int(r['n_sources'])} | {float(r['source_spread_pct']):.1f}% |"
+        for r in spreads
+    ]
+    lines.append("")
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n".join(lines), encoding="utf-8")
+    return target
 
 
 def sources_for_day(

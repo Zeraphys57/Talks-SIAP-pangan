@@ -430,9 +430,20 @@ def runs_cmd(limit: int, close_stale: float | None) -> None:
 
 @cli.command("preprocess")
 @click.option("--disagreements", default=10, show_default=True, help="Widest spreads to print.")
-def preprocess_cmd(disagreements: int) -> None:
+@click.option(
+    "--report/--no-report",
+    "write_report",
+    default=True,
+    help="Regenerate docs/data-quality.md.",
+)
+def preprocess_cmd(disagreements: int, write_report: bool) -> None:
     """Rebuild price_daily_unified from price_observations — the M2 gate output."""
-    from .preprocess import completeness_by_commodity, largest_disagreements, rebuild
+    from .preprocess import (
+        completeness_by_commodity,
+        largest_disagreements,
+        rebuild,
+        write_data_quality_report,
+    )
     from .runs import start_run
 
     try:
@@ -446,6 +457,7 @@ def preprocess_cmd(disagreements: int) -> None:
                 run.finish(status)
             completeness = completeness_by_commodity(conn)
             spreads = largest_disagreements(conn, disagreements)
+            report_path = write_data_quality_report(conn) if write_report else None
     except (MissingSetting, DatabaseError, ConfigError) as exc:
         _fatal(str(exc))
         return
@@ -506,6 +518,9 @@ def preprocess_cmd(disagreements: int) -> None:
                 fg="red",
             )
         )
+
+    if report_path is not None:
+        click.echo(f"\n  wrote {report_path}")
 
 
 if __name__ == "__main__":  # pragma: no cover

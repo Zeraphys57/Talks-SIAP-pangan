@@ -181,14 +181,46 @@ Two readings, and they are not yet distinguishable:
    ordinary between-source variation — several unconverted commodities here
    differ by 1.2–3.4% with no conversion involved at all.
 
-**Not changed on the strength of one day's data.** Once the backfill has run,
-the same comparison across hundreds of days will separate a systematic offset
-from noise: a constant error shows as a stable ratio, market variation does
-not. That test belongs in M2's cross-source reconciliation report, and the
-outcome — including "we left it at 0.91" — goes in `docs/methods.md`.
+### Answered in M2: the offset is systematic, but 0.91 stays
 
-Until then the conversion is recorded per row in `price_observations.unit_factor`,
-so any later correction can be applied retroactively without re-scraping.
+The test proposed above has now been run over **439 overlapping days** in
+`jawa_timur`, comparing SP2KP (native litres) against siskaperbapo (per kg,
+converted at 0.91). Controls are commodities that undergo **no** conversion in
+either source, so any offset they show is about the survey panels rather than
+about units.
+
+| commodity | median ratio sp2kp / siskaperbapo | sd |
+|---|---:|---:|
+| **minyak-goreng-curah** — converted ×0.91 | **1.0356** | **0.0061** |
+| beras-medium — control | 1.0222 | 0.0345 |
+| gula-pasir — control | 0.9865 | 0.0055 |
+| telur-ayam-ras — control | 0.9927 | 0.0059 |
+| daging-ayam-ras — control | 0.9961 | 0.0083 |
+| daging-sapi — control | 0.9983 | 0.0078 |
+| bawang-merah — control | 0.9814 | 0.0264 |
+
+Every control sits within ±2% of parity. The one converted commodity sits
+**3.6% high, with the tightest variance in the table**. A stable ratio with low
+variance is the signature of a constant offset, not of market noise — the
+question posed in M1 is answered: **the discrepancy is systematic.**
+
+The implied density is `0.91 × 1.0356 = 0.9424 kg/L`.
+
+**The constant is nevertheless left at 0.91.** Refined palm olein is ~0.91–0.92
+kg/L at ambient temperature; 0.942 is outside the physical range for the product
+either portal claims to be pricing. The residual is therefore more likely a
+product-definition or panel difference — SP2KP's "Minyak Goreng Sawit Curah"
+against siskaperbapo's "Minyak Goreng Curah" — than a wrong physical constant.
+
+Re-fitting a physical constant so that two data sources agree is calibrating on
+the data the project then goes on to analyse. It would remove a visible,
+explainable 3.6% disagreement and replace it with an invisible assumption, which
+is the worse trade for a paper that has to defend its numbers.
+
+Practical impact is small: `jawa_timur` carries three sources for cooking oil, so
+the median is rarely the converted siskaperbapo figure. `unit_factor` is stored
+per row, so if better evidence arrives the correction applies retroactively
+without re-scraping. Reproduce with the query in `docs/methods.md`.
 
 ## pihps — Bank Indonesia ✅ implemented
 
