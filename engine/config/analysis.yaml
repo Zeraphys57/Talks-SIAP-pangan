@@ -1,0 +1,107 @@
+# Analysis parameters. Nothing in a module body may hardcode any of these.
+#
+# Every value here is recorded into `analysis_runs.params` on each run, so a
+# figure in the paper can be traced to the exact configuration that produced it.
+
+version: 1
+updated: 2026-07-29
+
+# Single seed for every stochastic step. Isolation Forest, the M7 candidate
+# shuffle and the K-Means initialisation all draw from it, so one number
+# reproduces the whole pipeline.
+seed: 20260729
+
+# ---------------------------------------------------------------------------
+# Shared input policy
+# ---------------------------------------------------------------------------
+input:
+  # Imputed rows are excluded from both detectors.
+  #
+  # An interpolated value is a deterministic function of its two neighbours: it
+  # carries no new information, and because it lies exactly on the line between
+  # them it *reduces* the variance of any window containing it. A smaller
+  # denominator inflates every z-score in that window, so including imputed
+  # rows would manufacture anomalies. Scoring an invented value as anomalous
+  # would be worse still.
+  #
+  # Consequence to keep in mind: in PIHPS-only regions roughly 2/7 of days are
+  # imputed weekends, leaving ~21-22 real observations in a 30-day window —
+  # just above the min_observations floor below.
+  exclude_imputed: true
+
+# ---------------------------------------------------------------------------
+# 6.1 Z-Score — statistical baseline
+# ---------------------------------------------------------------------------
+zscore:
+  # Trailing window: days t-30 .. t-1. Day t is NOT in its own baseline —
+  # including it would let a spike partly cancel itself, which is the exact
+  # leak that makes a naive rolling z-score under-detect.
+  window_days: 30
+
+  # Below this many real observations in the window, emit NULL rather than a
+  # number computed from too little history.
+  min_observations: 20
+
+  # |z| at or above this is flagged. The proposal notes Z-Score's normality
+  # assumption as its weakness; computing on log price is the mitigation, and
+  # that choice belongs in the paper.
+  threshold: 2.5
+
+  # norm_score = clip(|z| / norm_divisor, 0, 1), so |z| >= 4 saturates at 1.
+  norm_divisor: 4.0
+
+  # Minimum baseline standard deviation, in log space, for a z-score to mean
+  # anything. Below this the score is NULL.
+  #
+  # Why this exists: some sources carry a value forward between surveys instead
+  # of resurveying. PIHPS does this — M2 found it pinned to the same rupiah for
+  # days at a time — and in 2023 it was the *only* source for jawa_tengah and
+  # di_yogyakarta. A 30-day window over a stale feed has a standard deviation of
+  # about 1e-16, so the first real movement divides by nearly zero and scores
+  # |z| in the millions. The first run produced z = -20,824,185.
+  #
+  # Those are not anomalies. A z-score against a baseline that was not updating
+  # measures the source's publication cadence, not the market, and the honest
+  # answer is that the detector cannot judge that window at all.
+  #
+  # 0.0005 in log space is a 0.05% daily standard deviation: below that a staple
+  # food price has effectively not moved for a month, which no real market does.
+  min_baseline_std: 0.0005
+
+  # Prices are right-skewed and multiplicative; a 10% move costs the same in
+  # log space at any level. This is the documented mitigation for the
+  # normality assumption.
+  use_log_price: true
+
+# ---------------------------------------------------------------------------
+# 6.2 Isolation Forest — multivariate
+# ---------------------------------------------------------------------------
+iforest:
+  # Fitted per commodity x region, never globally: daging-sapi trades around
+  # 130,000 and beras around 13,000, so one global model would spend its splits
+  # separating commodities rather than finding anomalies within each.
+  n_estimators: 200
+
+  # Default only. M7 sweeps 0.01 / 0.03 / 0.05 on a held-out split — tuning
+  # this against the reported labels would be leakage.
+  contamination: 0.03
+
+  min_observations: 60
+
+  features:
+    - log_price
+    - pct_change_1d
+    - pct_change_7d
+    - rolling_std_14d
+    - demand_z52
+    - dow
+
+  rolling_std_window: 14
+
+  # Google Trends is currently throttled to zero, so demand_z52 is absent for
+  # every row. Rather than dropping the feature (which would change the model
+  # between runs depending on whether Trends happened to work), it is filled
+  # with this constant and the substitution is recorded in the run notes.
+  # A constant column contributes no splits, so the model behaves as if the
+  # feature were absent — but reproducibly so.
+  demand_missing_fill: 0.0

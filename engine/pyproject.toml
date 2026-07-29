@@ -7,7 +7,10 @@ name = "siap"
 version = "0.1.0"
 description = "SIAP-PANGAN analysis engine: ingestion, anomaly detection, clustering, seasonality, fusion, evaluation"
 readme = "../README.md"
-requires-python = ">=3.11"
+# 3.12 rather than 3.11: numpy's bundled type stubs use `type` statement syntax,
+# which only parses on 3.12+. Claiming 3.11 support we do not type-check would be
+# worse than stating the real floor. CI runs 3.12.
+requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [{ name = "Tim RGB", email = "" }]
 
@@ -28,6 +31,10 @@ dependencies = [
     "beautifulsoup4>=4.12",  # siskaperbapo / pihps / jogja return HTML fragments
     "lxml>=5.2",             # parser backend for the above
     "pytrends>=4.9",         # UNOFFICIAL Google Trends wrapper; best-effort only
+    # M3 — anomaly detection
+    "pandas>=2.2",           # series handling; rolling windows
+    "numpy>=1.26",
+    "scikit-learn>=1.5",     # IsolationForest, StandardScaler, KMeans (M4)
 ]
 
 [project.optional-dependencies]
@@ -57,7 +64,7 @@ markers = [
 # ---------------------------------------------------------------------------
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
@@ -79,8 +86,14 @@ known-first-party = ["siap"]
 
 # ---------------------------------------------------------------------------
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 files = ["src"]
 strict = true
 warn_unreachable = true
 plugins = ["pydantic.mypy"]
+
+# The scientific stack ships no type information. Ignoring the *imports* keeps
+# strict checking on everything we write; it does not weaken our own code.
+[[tool.mypy.overrides]]
+module = ["pandas.*", "sklearn.*", "pytrends.*", "statsmodels.*", "matplotlib.*"]
+ignore_missing_imports = true

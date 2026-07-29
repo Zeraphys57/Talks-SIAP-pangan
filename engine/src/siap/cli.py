@@ -523,5 +523,60 @@ def preprocess_cmd(disagreements: int, write_report: bool) -> None:
         click.echo(f"\n  wrote {report_path}")
 
 
+@cli.command("analyze")
+@click.option("--top", default=10, show_default=True, help="Strongest flags to print.")
+def analyze_cmd(top: int) -> None:
+    """Run Z-Score and Isolation Forest over every series — the M3 gate output."""
+    from .analyze import flag_counts, run_detectors, top_flagged
+
+    try:
+        with connect() as conn:
+            report = run_detectors(conn)
+            counts = flag_counts(conn, report.run_id)
+            strongest = top_flagged(conn, report.run_id, top)
+    except (MissingSetting, DatabaseError, ConfigError) as exc:
+        _fatal(str(exc))
+        return
+
+    click.echo(
+        f"run #{report.run_id}: {len(report.series)} series, {report.rows_written:,} score rows\n"
+    )
+
+    click.echo("=" * 96)
+    click.echo("FLAG COUNTS PER COMMODITY PER METHOD")
+    click.echo("=" * 96)
+    click.echo(f"  {'commodity':<24}{'method':<10}{'flagged':>9}{'scored':>9}{'total':>8}   rate")
+    for r in counts:
+        scored = int(r["scored"])
+        flagged = int(r["flagged"])
+        rate = flagged / scored * 100 if scored else 0.0
+        click.echo(
+            f"  {r['commodity']!s:<24}{r['method']!s:<10}{flagged:>9}{scored:>9}"
+            f"{int(r['total']):>8}   {rate:5.2f}%"
+        )
+
+    click.echo()
+    click.echo("=" * 96)
+    click.echo(f"TOP {len(strongest)} FLAGGED DATES — do any match a price event you recall?")
+    click.echo("=" * 96)
+    for r in strongest:
+        price = r["price_median"]
+        prev = r["prev_price"]
+        move = ""
+        if price is not None and prev not in (None, 0):
+            move = f"  {(float(price) / float(prev) - 1) * 100:+6.1f}% vs prev day"
+        price_text = f"Rp {float(price):>10,.0f}" if price is not None else " " * 13
+        click.echo(
+            f"  {r['obs_date']!s}  {r['region']!s:<17}{r['commodity']!s:<24}"
+            f"{r['method']!s:<9}{price_text}{move}"
+        )
+
+    if report.skipped:
+        click.echo()
+        click.echo(click.style(f"  {len(report.skipped)} series skipped or partial:", fg="yellow"))
+        for s in report.skipped[:10]:
+            click.echo(f"      {s.region}/{s.commodity}: {s.skipped}")
+
+
 if __name__ == "__main__":  # pragma: no cover
     cli()

@@ -411,6 +411,65 @@ def load_units() -> UnitsConfig:
         raise ConfigError(f"units.yaml is invalid: {exc}") from exc
 
 
+# ---------------------------------------------------------------------------
+# analysis.yaml
+# ---------------------------------------------------------------------------
+class InputPolicy(_Strict):
+    exclude_imputed: bool
+
+
+class ZScoreParams(_Strict):
+    window_days: int = Field(gt=0)
+    min_observations: int = Field(gt=1)
+    threshold: float = Field(gt=0)
+    norm_divisor: float = Field(gt=0)
+    use_log_price: bool
+    min_baseline_std: float = Field(gt=0)
+
+    @model_validator(mode="after")
+    def _window_can_hold_the_minimum(self) -> ZScoreParams:
+        if self.min_observations > self.window_days:
+            raise ValueError(
+                f"min_observations ({self.min_observations}) exceeds window_days "
+                f"({self.window_days}); no window could ever satisfy it"
+            )
+        return self
+
+
+class IForestParams(_Strict):
+    n_estimators: int = Field(gt=0)
+    contamination: float = Field(gt=0, lt=0.5)
+    min_observations: int = Field(gt=0)
+    features: list[str] = Field(min_length=1)
+    rolling_std_window: int = Field(gt=1)
+    demand_missing_fill: float
+
+
+class AnalysisConfig(_Strict):
+    seed: int
+    input: InputPolicy
+    zscore: ZScoreParams
+    iforest: IForestParams
+
+
+@lru_cache(maxsize=1)
+def load_analysis() -> AnalysisConfig:
+    """Load and validate analysis.yaml."""
+    doc = _read_yaml(config_dir() / "analysis.yaml")
+    for key in ("seed", "input", "zscore", "iforest"):
+        if key not in doc:
+            raise ConfigError(f"analysis.yaml has no top-level {key!r}")
+    try:
+        return AnalysisConfig(
+            seed=doc["seed"],
+            input=InputPolicy(**doc["input"]),
+            zscore=ZScoreParams(**doc["zscore"]),
+            iforest=IForestParams(**doc["iforest"]),
+        )
+    except ValueError as exc:
+        raise ConfigError(f"analysis.yaml is invalid: {exc}") from exc
+
+
 def config_fingerprint() -> dict[str, str | int | None]:
     """Summary of the loaded reference data, for `analysis_runs.params`."""
     ref = load_reference()

@@ -6,6 +6,82 @@ reason, so they can be defended rather than discovered.
 
 ---
 
+## M3 — Anomaly modules (2026-07-29)
+
+Z-Score and Isolation Forest per §6.1–6.2, 60 series, 78k score rows.
+19 detector tests, including synthetic spikes at known indices that both arms
+must recover.
+
+### Bug found on real data: a stale source produced z = −20,824,185
+
+The first production run scored |z| in the millions. Cause: M2 recorded that
+PIHPS carries values forward between surveys rather than resurveying, and in
+2023 it was the **only** source for `jawa_tengah` and `di_yogyakarta`. A 30-day
+window over a feed that is repeating itself has a standard deviation of about
+1e-16, so the first real movement divides by nearly zero.
+
+Those are not anomalies. A z-score against a baseline that was not updating
+measures the source's publication cadence, not the market. Fixed by adding
+`zscore.min_baseline_std` (0.0005 in log space — a 0.05% daily sigma, below
+which a staple price has effectively not moved for a month): such windows now
+score NULL rather than producing an artefact. Regression test pins the exact
+shape that caused it.
+
+### A conflict between §6.1 and §7.2, reported rather than improvised around
+
+After the fix, flags were still dominated by trivial price movements. Measured
+across the full run:
+
+| method | flags on <1% moves | flags on >=10% moves |
+|---|---:|---:|
+| zscore | **54.6%** | 7.9% |
+| iforest | 36.2% | 17.3% |
+
+The brief defines an anomaly (§7.2) as a change exceeding **±10%** against the
+trailing 30-day mean, sustained two days. But §6.1 specifies a detector that
+flags at |z| >= 2.5, which corresponds to a 10% move *only when the baseline
+standard deviation happens to be about 4%*. On a calm series — and staple foods
+under price control are often very calm — 2.5 sigma is a 0.3% move.
+
+**The detector measures statistical unusualness; the ground truth encodes
+operational significance.** They are different quantities, and the gap is
+structural, not a tuning problem: no choice of threshold fixes a mismatch in the
+denominator.
+
+**Nothing was changed in the detector.** Adding a magnitude gate to the Z-Score
+arm was considered and rejected, because it would defeat the experiment. The
+four ablation arms exist so that `fusion` has to earn its complexity against a
+*naive* baseline; quietly making the baseline smarter would rig that comparison.
+
+More to the point, the brief already anticipates this. Fusion's second term is
+`M = clip(|pct_change_7d| / 0.15, 0, 1)` — a pure magnitude signal. The
+prediction this sets up, which M7 will measure rather than assume:
+
+* `zscore_only` will show **low precision** against the adjudicated ground
+  truth, with a ceiling near 8%;
+* `fusion` should beat it substantially, and the reason will be attributable to
+  `M` specifically.
+
+If fusion does *not* beat it, that is the reportable result.
+
+### Note on Isolation Forest flag counts
+
+Every commodity flags at exactly 3.06%, because `contamination = 0.03` *defines*
+the proportion flagged rather than discovering it. The flag count therefore
+carries no information about how anomalous a commodity is; only the ranking
+within a series does. This is why `norm_score` is a percentile rank, and why M7
+sweeps contamination on a held-out split rather than reading anything into the
+default.
+
+### Deviation from the brief
+
+| # | Brief says | Built as | Why |
+|---|---|---|---|
+| 16 | `\|z\| >= 2.5` flags | plus `min_baseline_std` guard | a stale-source baseline of sigma~1e-16 produced z in the millions; the window is now declared unusable instead |
+| 17 | Python 3.11 | Python 3.12 floor | numpy's bundled stubs use `type` statement syntax that only parses on 3.12+; claiming 3.11 support we cannot type-check would be worse |
+
+---
+
 ## M1 — Ingestion and historical backfill (2026-07-28 → 29)
 
 Reconnaissance came first, per the brief's instruction to verify every URL live

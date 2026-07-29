@@ -145,7 +145,7 @@ class TrendsCollector:
             return cached
 
         try:
-            from pytrends.request import TrendReq  # type: ignore[import-untyped]
+            from pytrends.request import TrendReq
         except ImportError as exc:  # pragma: no cover
             self.record_failure(keyword, "pytrends_missing", str(exc))
             return None
