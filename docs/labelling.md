@@ -46,6 +46,13 @@ siap lab-annotator --email roy@example.com   --code A2
 siap lab-annotator                              # list, to confirm
 ```
 
+**Register exactly the two who will label.** Cohen's kappa is defined for a
+pair. If a third person is registered and also labels, `siap kappa` refuses
+rather than silently picking two and ignoring the third — but the cleaner course
+is not to register the adjudicator as an annotator at all. Their job is
+resolving disagreements into `gt_events`, and someone who has already labelled
+blind cannot adjudicate their own disagreements impartially.
+
 Codes are pseudonymous by constraint (`^[A-Z][0-9]{1,2}$`) — they appear in the
 paper, so they must not be someone's name.
 
