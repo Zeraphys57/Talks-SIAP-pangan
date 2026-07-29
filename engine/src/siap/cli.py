@@ -1202,6 +1202,80 @@ def ablate_cmd() -> None:
                 click.echo(f"    {line.strip().rstrip('.')}.")
 
 
+@cli.command("reproduce")
+@click.option("--run", "run_id", type=int, default=None, help="Anomaly run to verify.")
+def reproduce_cmd(run_id: int | None) -> None:
+    """Recompute a stored anomaly run and compare it row by row (§9).
+
+    Uses the run's own recorded parameters and seed, not the current YAML —
+    reproducing a run means reproducing what it did.
+    """
+    from .reproduce import latest_anomaly_run, verify
+
+    try:
+        with connect() as conn:
+            target = run_id if run_id is not None else latest_anomaly_run(conn)
+            if target is None:
+                _fatal("no successful anomaly run to verify; run `siap analyze` first")
+                return
+            click.echo(f"  recomputing run #{target}; this refits every series...\n")
+            report = verify(conn, target)
+    except (MissingSetting, DatabaseError, ConfigError, ValueError) as exc:
+        _fatal(str(exc))
+        return
+
+    click.echo("=" * 84)
+    click.echo(f"REPRODUCIBILITY — run #{report.run_id}")
+    click.echo("=" * 84)
+    click.echo(f"  seed          : {report.seed}")
+    click.echo(f"  run commit    : {report.run_git_sha or '(unrecorded)'}")
+    click.echo(f"  current commit: {report.current_git_sha or '(not a git checkout)'}")
+    click.echo(f"  same code     : {'yes' if report.code_matches else 'NO'}")
+    click.echo(f"\n  series recomputed : {report.series_checked}")
+    click.echo(f"  scores compared   : {report.scores_compared:,}")
+    click.echo(f"  stored / recomputed: {report.stored_rows:,} / {report.recomputed_rows:,}")
+
+    marker = click.style(OK, fg="green") if report.scores_match else click.style(BAD, fg="red")
+    click.echo(f"\n[{marker}] every score identical to six decimal places")
+    if report.mismatches:
+        click.echo(f"         {len(report.mismatches):,} differing score(s); first 10:")
+        for m in report.mismatches[:10]:
+            click.echo(
+                f"           {m.obs_date} {m.commodity}/{m.region} {m.method}: "
+                f"stored={m.stored} recomputed={m.recomputed}"
+            )
+
+    marker = click.style(OK, fg="green") if report.counts_match else click.style(BAD, fg="red")
+    click.echo(f"[{marker}] the input data is unchanged since the run")
+
+    if report.version_drift:
+        click.echo(click.style("\n  LIBRARY VERSIONS HAVE MOVED SINCE THIS RUN", fg="yellow"))
+        for package, (was, now) in sorted(report.version_drift.items()):
+            click.echo(f"    {package:<16} run={was or '-':<12} now={now or '-'}")
+        click.echo(
+            "    Scores still matched, so the drift did not change the result here.\n"
+            "    Cite the versions the run recorded, not the ones installed today."
+        )
+
+    for note in report.notes:
+        click.echo()
+        for line in _wrap(note):
+            click.echo(f"  {line}")
+
+    click.echo()
+    if report.ok:
+        click.echo(click.style("Run reproduced exactly.", fg="green"))
+    else:
+        click.echo(
+            click.style(
+                "NOT REPRODUCED. The determinism claim does not hold for this run; "
+                "do not cite its numbers until this is understood.",
+                fg="red",
+            )
+        )
+        sys.exit(1)
+
+
 @cli.command("export")
 @click.option(
     "--out",

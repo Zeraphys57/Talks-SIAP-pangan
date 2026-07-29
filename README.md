@@ -22,7 +22,7 @@ commodity, and presents the result as a mobile-first dashboard for UMKM owners.
 | `engine/config/` | All tunable parameters and reference data (YAML) |
 | `supabase/migrations/` | Numbered SQL migrations — the single source of schema truth |
 | `web/` | Next.js dashboard (read-only) and `/lab` research console |
-| `docs/` | Architecture, sources, methods, reproducibility, changelog |
+| `docs/` | [architecture](docs/architecture.md), [methods](docs/methods.md), [design](docs/design.md), [reproducibility](docs/reproducibility.md), [sources](docs/sources.md), [labelling](docs/labelling.md), [changelog](docs/changelog.md) |
 | `paper-exports/` | Generated figures and tables (gitignored) |
 
 ## Setup
@@ -36,7 +36,9 @@ cp .env.example .env          # then fill in the values
 cd engine
 py -3.12 -m venv .venv
 .venv/Scripts/activate        # Windows;  source .venv/bin/activate elsewhere
-pip install -e ".[dev]"
+pip install -e ".[dev]"          # development
+# or, to reproduce a published number exactly:
+#   pip install -r requirements.lock && pip install -e . --no-deps
 
 siap config                   # validate engine/config/*.yaml, no database needed
 siap migrate                  # apply supabase/migrations/*.sql in order
@@ -49,6 +51,21 @@ siap ingest --source pihps --date 2026-07-27
 siap backfill --source pihps --start 2023-07-29 --end 2026-07-29   # resumable
 siap trends                              # demand signal; best-effort
 siap coverage --detail --samples 5       # coverage + provenance samples
+
+# analysis
+siap preprocess               # rebase sources, rebuild the daily series
+siap analyze                  # Z-Score + Isolation Forest
+siap cluster                  # K-Means regimes
+siap seasonal                 # STL
+siap fuse                     # one alert level per commodity
+siap reproduce                # recompute the last run and diff it, score by score
+
+# research
+siap gt-pool                  # stratified ground-truth pool
+siap lab-check                # attack the /lab access model, then roll back
+siap kappa                    # inter-annotator agreement (the M7 stop condition)
+siap ablate                   # parameter sensitivity
+siap export                   # figures and tables -> paper-exports/
 
 # web
 cd ../web
@@ -114,6 +131,12 @@ are recorded in [`docs/changelog.md`](docs/changelog.md).
 writes a `fetch_failures` row. Every number rendered in the UI traces to a row
 in Postgres, which traces to a `raw_snapshots` entry, which traces to a URL and
 a fetch timestamp.
+
+**Determinism is checked, not asserted.** Every run records its git SHA, seed,
+resolved parameters and library versions; `siap reproduce` reloads a run's own
+parameters, recomputes every score and diffs them row by row. Last verified:
+run #47, 78,274 scores, all identical. The same check runs on every scheduled
+pipeline. See [`docs/reproducibility.md`](docs/reproducibility.md).
 
 ## Data sources
 

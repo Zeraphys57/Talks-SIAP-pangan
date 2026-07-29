@@ -51,8 +51,13 @@ jobs:
           cache: pip
           cache-dependency-path: engine/pyproject.toml
 
+      # From the lock, then the package without re-resolving. A scheduled run
+      # that silently picks up a new scikit-learn would move the numbers on the
+      # dashboard with nothing in the repository to explain it.
       - name: Install
-        run: pip install -e .
+        run: |
+          pip install -r requirements.lock
+          pip install -e . --no-deps
 
       - name: Resolve target date (WIB)
         id: target
@@ -97,3 +102,68 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: siap doctor
+
+  # -------------------------------------------------------------------------
+  # Analysis. Separate job so a scraper outage cannot leave the database
+  # half-rebuilt: `preprocess` truncates and rewrites price_daily_unified, and
+  # doing that on top of a failed ingest would rebuild the series from data
+  # nobody checked.
+  #
+  # `needs: ingest` without `if: always()` is deliberate — no ingest, no
+  # reanalysis. Yesterday's alerts staying up is the correct failure mode; alerts
+  # recomputed from a partial day are not.
+  # -------------------------------------------------------------------------
+  analyse:
+    name: analyse
+    needs: ingest
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: engine
+
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: engine/requirements.lock
+
+      - name: Install
+        run: |
+          pip install -r requirements.lock
+          pip install -e . --no-deps
+
+      # Order is not arbitrary. preprocess rebuilds the unified series that
+      # everything else reads; fuse consumes the anomaly run analyze produces.
+      - name: Reconcile sources into the daily series
+        run: siap preprocess
+
+      - name: Detect anomalies
+        run: siap analyze
+
+      - name: Cluster regimes
+        run: siap cluster
+
+      - name: Decompose seasonality
+        run: siap seasonal
+
+      - name: Fuse into alerts
+        run: siap fuse
+
+      # The determinism claim, checked on every scheduled run rather than
+      # asserted once in the paper. Recomputes the run just written and compares
+      # every score against what was stored.
+      - name: Verify the run reproduces
+        run: siap reproduce
+
+      - name: Reconcile abandoned runs
+        if: always()
+        run: siap runs --close-stale 6

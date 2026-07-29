@@ -6,6 +6,161 @@ reason, so they can be defended rather than discovered.
 
 ---
 
+## M9 — Reproducibility (2026-07-29)
+
+The determinism claim is now checked rather than asserted. `siap reproduce`
+reloads a run's **own recorded** parameters and seed — not the current
+`analysis.yaml`, which may legitimately have moved — recomputes every score from
+`price_daily_unified`, and diffs them row by row at the precision the database
+stores.
+
+**Result: run #47, 60 series, 78,274 scores, every one identical.** Including
+IsolationForest, which was the arm that could plausibly have failed.
+
+Then verified again from a throwaway virtualenv built only from
+`requirements.lock` — same 78,274, same result. That tests the reproduction
+instructions rather than just publishing them.
+
+### Two bugs the verifier found, both in the verifier
+
+Worth recording because they are the two ways this kind of check goes wrong.
+
+**It reported 5,272 false mismatches on the first run.** Stored `None` against
+recomputed `NaN`: the same fact, since a score inside the 30-day warm-up is not
+a number and is persisted as NULL. Worse, `Decimal("NaN") != Decimal("NaN")`, so
+every warm-up row appeared to mismatch *itself*. A verifier that cries wolf gets
+ignored.
+
+**It initially had nothing to check.** Run selection required
+`status = 'success'`, but every anomaly run is `partial` — 12 Kota Yogyakarta
+series have one week of history against IsolationForest's 60-row minimum. A
+verifier that silently passes because it inspected nothing is worse than no
+verifier, since it converts an unchecked claim into a checked-looking one. Both
+failure modes now have tests.
+
+### Comparison is exact, deliberately
+
+No tolerance. Floating point is deterministic for a fixed sequence of operations
+on fixed inputs, so a score differing in the twelfth decimal under the same seed
+and data means something genuinely non-deterministic — thread scheduling, hash
+ordering, an unseeded RNG. A tolerance would hide precisely the bug this exists
+to find.
+
+Version drift is reported but does not fail the check: determinism is about the
+numbers, and the remedy for drift is to cite the versions the run recorded.
+
+### Dependencies are pinned twice, on purpose
+
+`pyproject.toml` keeps compatible ranges — a security patch to httpx should not
+need a commit. `requirements.lock` records the 57 exact versions a number came
+from, because `>=1.5` does not identify the scikit-learn that produced a figure.
+Both are true at once. Tests assert every analysis library is pinned and that no
+entry uses anything but `==`.
+
+### The daily pipeline only ingested
+
+`daily.yml` collected prices and stopped. Nothing re-ran `preprocess`,
+`analyze`, `cluster`, `seasonal` or `fuse`, so a scheduled deployment would have
+served a dashboard whose alerts never moved past whenever someone last ran the
+engine by hand.
+
+Added as a separate `analyse` job with `needs: ingest` and deliberately **not**
+`if: always()`. `preprocess` truncates and rewrites the unified series, and
+doing that on top of a failed ingest would rebuild everything from data nobody
+checked. Yesterday's alerts staying up is the correct failure mode; alerts
+recomputed from a partial day are not. Both jobs now install from the lock, so a
+scheduled run cannot silently pick up a new scikit-learn and move the numbers
+with nothing in the repository to explain it.
+
+### Documentation that was referenced but did not exist
+
+`docs/methods.md` was cited from five places — `docs/sources.md`,
+`analysis.yaml`, `fusion.yaml`, `cluster.py` and `0004_analysis.sql` — and had
+never been written. `docs/reproducibility.md` was listed in the README. Both now
+exist, and every `docs/*.md` reference in the repository resolves.
+
+`docs/reproducibility.md` states what is *not* reproducible as plainly as what
+is: scraping (portals revise), Google Trends (throttled), the ground truth (two
+people are not a deterministic process), and wall-clock-dependent dashboard
+output. A reproducibility document claiming everything reproduces is not
+credible.
+
+---
+
+## M8 — Public dashboard (2026-07-29)
+
+`docs/design.md` written first, as the M0 placeholder promised, so the
+components implement a stated position rather than improvise one. Region
+chooser, per-region alert board, commodity detail with chart, seasonal weeks,
+regime zone and provenance.
+
+### The two copy traps, now enforced in one file
+
+Both were identified during M6 and would have been easy to get wrong:
+
+**`kuning` does not mean "harga naik".** It means the price is behaving
+unusually, and it can be yellow while *falling*. The copy reads "kurang stabil".
+
+**`merah` fires on `|pct_change_7d|`, so a crash scores exactly like a spike.**
+For a warung owner those are opposite situations. Every non-green card states
+its direction, and the recommendation follows the direction rather than the
+level: bawang merah at `merah` on a **-17.5% fall** now reads *"harga sedang
+jauh di bawah kebiasaannya... bisa jadi waktu yang murah untuk menambah stok"*,
+not "consider delaying your purchase".
+
+Level is carried by a text label first, a mark second, colour third. `merah` and
+`hijau` are precisely the pair a red-green deficiency confuses, and they are this
+system's primary output.
+
+### Freshness: the front page is deliberately not today
+
+Measured while building. Siskaperbapo publishes **round placeholder figures on
+the current date** and replaces them with computed multi-market averages the
+next day. Its baseline rate of prices divisible by 500 is **0.4%**; on the
+current date it is **83.3%** (10 of 12 commodities). The day before: 0%.
+
+| region | latest day | flagged |
+|---|---|---:|
+| jawa_timur (unsettled) | 2026-07-29 | **12 of 12** |
+| jawa_tengah | 2026-07-28 | 5 of 12 |
+| di_yogyakarta | 2026-07-28 | 4 of 12 |
+
+The dashboard therefore reads the latest **settled** day — the most recent date
+strictly before today in WIB — resolved **per region**, because the regions do
+not share a latest date and a global `max(obs_date)` returns only East Java,
+leaving a Yogyakarta reader on an empty page. Jawa Timur now shows 3 of 12, with
+the withholding explained on screen.
+
+The engine was not changed. `daily.yml` already ingests *yesterday* for exactly
+this reason, and the upsert overwrites the placeholder on the next run; the
+provisional rows exist only because backfill was run by hand against today. The
+dashboard rule is defence in depth for a portal that publishes intraday.
+
+### Provenance that named portals contributing nothing
+
+The commodity page listed its sources from `source_regions` — configured
+coverage — which for DI Yogyakarta named four: `panelharga`, `pihps`, `sp2kp`,
+`trends`. Two are wrong. `panelharga` is `is_active: false` with zero
+observations, and `trends` is a demand signal that never writes a price.
+
+`docs/architecture.md` claims every number walks back to a URL. A provenance
+list naming portals that contributed nothing is worse than none: it looks like a
+guarantee and is not one.
+
+Migration 0010 adds a `series_sources` view derived from the observations
+themselves, which drops both on its own, and reports counts and date ranges. It
+exposes **metadata only, no price column**, so `price_observations` stays closed
+to anon while the dashboard can be honest. Because the view runs with definer
+rights by necessity, `doctor` now fails if a price column ever appears in it —
+16 checks.
+
+The commodity chart is deliberately the same construction the annotators saw in
+`/lab`: observed series, 30-day mean, +/-10% band. What the paper evaluated and
+what a warung owner looks at are then the same picture rather than two
+renderings that happen to disagree.
+
+---
+
 ## M7 — Evaluation harness (2026-07-29)
 
 Candidate pool, Cohen's kappa, four-arm matching, the label-free parameter
