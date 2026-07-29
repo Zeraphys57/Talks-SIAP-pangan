@@ -333,7 +333,7 @@ class BaseScraper(ABC):
         )
 
     # -- provenance ---------------------------------------------------------
-    def store_snapshot(self, fetched: Fetched) -> int:
+    def store_snapshot(self, fetched: Fetched, request: dict[str, Any] | None = None) -> int:
         """Persist a response body and return its `raw_snapshots.id`.
 
         Bodies are gzipped and hashed. When the immediately preceding snapshot
@@ -368,7 +368,11 @@ class BaseScraper(ABC):
                 content_hash,
                 body,
                 self.parser_version,
-                Json({"User-Agent": self.client.user_agent}),
+                # The request is recorded alongside the response, not just the
+                # User-Agent. For POST sources such as siskaperbapo the URL
+                # alone cannot reproduce the fetch — without the form body,
+                # "which date is this?" is unanswerable from the snapshot.
+                Json({"User-Agent": self.client.user_agent, **(request or {})}),
                 len(fetched.body),
             ),
         )
@@ -413,7 +417,12 @@ class BaseScraper(ABC):
 
         # The body is stored even when the status is an error: a 401 page is
         # evidence of the outage and worth keeping alongside its timestamp.
-        snapshot_id = self.store_snapshot(fetched)
+        request: dict[str, Any] = {"method": method}
+        if kwargs.get("params"):
+            request["params"] = {k: str(v) for k, v in kwargs["params"].items()}
+        if kwargs.get("data"):
+            request["body"] = {k: str(v) for k, v in kwargs["data"].items()}
+        snapshot_id = self.store_snapshot(fetched, request)
         self.conn.commit()
 
         if not 200 <= fetched.status_code < 300:
