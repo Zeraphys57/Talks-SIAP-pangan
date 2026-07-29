@@ -445,18 +445,39 @@ class IForestParams(_Strict):
     demand_missing_fill: float
 
 
+class KMeansParams(_Strict):
+    k_min: int = Field(ge=2)
+    k_max: int = Field(ge=2)
+    n_init: int = Field(gt=0)
+    max_iter: int = Field(gt=0)
+    min_days_in_month: int = Field(gt=1)
+    min_cells: int = Field(gt=0)
+    zone_weight_volatility: float
+    zone_weight_cum_change: float
+
+    @model_validator(mode="after")
+    def _k_range_is_ordered(self) -> KMeansParams:
+        if self.k_max < self.k_min:
+            raise ValueError(f"k_max ({self.k_max}) is below k_min ({self.k_min})")
+        # Silhouette is undefined for a single cluster and for k == n_samples.
+        if self.k_min < 2:
+            raise ValueError("k_min must be at least 2; silhouette is undefined for k=1")
+        return self
+
+
 class AnalysisConfig(_Strict):
     seed: int
     input: InputPolicy
     zscore: ZScoreParams
     iforest: IForestParams
+    kmeans: KMeansParams
 
 
 @lru_cache(maxsize=1)
 def load_analysis() -> AnalysisConfig:
     """Load and validate analysis.yaml."""
     doc = _read_yaml(config_dir() / "analysis.yaml")
-    for key in ("seed", "input", "zscore", "iforest"):
+    for key in ("seed", "input", "zscore", "iforest", "kmeans"):
         if key not in doc:
             raise ConfigError(f"analysis.yaml has no top-level {key!r}")
     try:
@@ -465,6 +486,7 @@ def load_analysis() -> AnalysisConfig:
             input=InputPolicy(**doc["input"]),
             zscore=ZScoreParams(**doc["zscore"]),
             iforest=IForestParams(**doc["iforest"]),
+            kmeans=KMeansParams(**doc["kmeans"]),
         )
     except ValueError as exc:
         raise ConfigError(f"analysis.yaml is invalid: {exc}") from exc

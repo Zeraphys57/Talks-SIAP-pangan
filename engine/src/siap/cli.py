@@ -578,5 +578,91 @@ def analyze_cmd(top: int) -> None:
             click.echo(f"      {s.region}/{s.commodity}: {s.skipped}")
 
 
+@cli.command("cluster")
+def cluster_cmd() -> None:
+    """Fit the regime clustering — the M4 gate output."""
+    from .cluster import run_clustering, zone_counts_by_commodity, zone_table
+
+    try:
+        with connect() as conn:
+            report = run_clustering(conn)
+            if report.model is None:
+                _fatal("no monthly cells met the minimum-days threshold; nothing to cluster")
+                return
+            zones = zone_table(conn, report.run_id)
+            counts = zone_counts_by_commodity(conn, report.run_id)
+    except (MissingSetting, DatabaseError, ConfigError, ValueError) as exc:
+        _fatal(str(exc))
+        return
+
+    model = report.model
+    click.echo(
+        f"run #{report.run_id}: {report.cells:,} cells "
+        f"(commodity x region x month), {report.assignments_written:,} assignments\n"
+    )
+
+    click.echo("=" * 96)
+    click.echo("K SEARCH — silhouette selects k, the elbow is recorded for the paper")
+    click.echo("=" * 96)
+    click.echo(f"  {'k':>3}{'inertia':>14}{'silhouette':>13}")
+    for entry in model.k_search:
+        mark = click.style("  <-- selected", fg="green") if entry.k == model.k_selected else ""
+        click.echo(f"  {entry.k:>3}{entry.inertia:>14,.1f}{entry.silhouette:>13.4f}{mark}")
+    click.echo(f"\n  selected k = {model.k_selected}  (silhouette {model.silhouette_avg:.4f})")
+    if model.k_selected > 3:
+        click.echo(
+            click.style(
+                "  k > 3, so middle clusters merge into kuning — k was not forced to 3",
+                fg="yellow",
+            )
+        )
+
+    click.echo()
+    click.echo("=" * 96)
+    click.echo("CENTROIDS (original units) AND ZONE MAPPING")
+    click.echo("=" * 96)
+    click.echo(f"  {'cluster':>8}{'volatility':>13}{'cum_change':>13}{'cells':>8}   zone")
+    for cluster_id, centroid in sorted(model.centroids.items()):
+        zone = model.zone_mapping[cluster_id]
+        colour = {"merah": "red", "kuning": "yellow", "hijau": "green"}[zone]
+        click.echo(
+            f"  {cluster_id:>8}{centroid['volatility']:>13.5f}"
+            f"{centroid['cum_change'] * 100:>12.2f}%{centroid['n_cells']:>8}   "
+            + click.style(zone, fg=colour)
+        )
+
+    click.echo()
+    click.echo("=" * 96)
+    click.echo("ZONE FREQUENCY PER COMMODITY — cabai/bawang should dominate merah")
+    click.echo("=" * 96)
+    click.echo(
+        f"  {'commodity':<24}{'merah':>7}{'kuning':>8}{'hijau':>7}{'total':>7}"
+        f"{'avg volatility':>16}"
+    )
+    for r in counts:
+        total = int(r["total"]) or 1
+        merah_pct = int(r["merah"]) / total * 100
+        merah_colour = "red" if merah_pct >= 25 else ("yellow" if merah_pct >= 10 else "")
+        line = (
+            f"  {r['commodity']!s:<24}{int(r['merah']):>7}{int(r['kuning']):>8}"
+            f"{int(r['hijau']):>7}{total:>7}{float(r['avg_volatility']):>16.5f}"
+        )
+        click.echo(click.style(line, fg=merah_colour) if merah_colour else line)
+
+    click.echo()
+    click.echo("=" * 96)
+    click.echo(f"ZONES FOR THE MOST RECENT MONTH ({zones[0]['period_month'] if zones else '-'})")
+    click.echo("=" * 96)
+    for r in zones:
+        zone = str(r["zone"])
+        colour = {"merah": "red", "kuning": "yellow", "hijau": "green"}[zone]
+        badge = click.style(zone.upper().ljust(7), fg=colour)
+        click.echo(
+            f"  {badge}{r['region']!s:<17}{r['commodity']!s:<24}"
+            f"vol {float(r['feat_volatility']):.5f}  "
+            f"change {float(r['feat_cum_change']) * 100:+7.2f}%"
+        )
+
+
 if __name__ == "__main__":  # pragma: no cover
     cli()

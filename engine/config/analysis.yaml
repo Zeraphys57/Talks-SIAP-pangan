@@ -105,3 +105,47 @@ iforest:
   # A constant column contributes no splits, so the model behaves as if the
   # feature were absent — but reproducibly so.
   demand_missing_fill: 0.0
+
+# ---------------------------------------------------------------------------
+# 6.3 K-Means clustering
+# ---------------------------------------------------------------------------
+kmeans:
+  # The unit of observation is commodity x region x MONTH, not commodity.
+  #
+  # Twelve commodities alone gives twelve points, and a silhouette score
+  # computed on twelve points while searching k up to 8 is noise: adding or
+  # dropping one commodity would swing the selected k, and there is no way to
+  # tell real structure from an arbitrary partition of a tiny sample. Widening
+  # the unit to (commodity, region, month) yields on the order of a thousand
+  # cells, which makes the k-search and the silhouette curve defensible.
+  #
+  # It also changes what a cluster *means*: from the static and unfalsifiable
+  # "cabai is a volatile commodity" to "cabai in DIY during March 2024 sat in a
+  # high-volatility, rising regime". The same commodity can move between zones
+  # across months, which is what the dashboard actually needs to say.
+
+  # The full search is recorded, not just the winner: the elbow/silhouette curve
+  # is a required paper figure and storing only k would make it unreproducible.
+  k_min: 2
+  k_max: 8
+
+  n_init: 10
+  max_iter: 300
+
+  # A month needs enough real observations for a volatility estimate to mean
+  # anything. Below this the cell is dropped rather than contributing a
+  # standard deviation computed from a handful of days.
+  min_days_in_month: 15
+
+  # Below this many cells the clustering itself is not worth trusting.
+  min_cells: 30
+
+  # Post-hoc zone mapping. Clusters are ranked by
+  #     0.5 * z(centroid_volatility) + 0.5 * z(centroid_cum_change)
+  # highest -> merah, lowest -> hijau, everything between -> kuning.
+  #
+  # k is NOT forced to 3. When the silhouette selects k > 3 the middle clusters
+  # merge into kuning, which is stated in docs/methods.md. This is what resolves
+  # the proposal's contradiction between "find the optimal K" and "three zones".
+  zone_weight_volatility: 0.5
+  zone_weight_cum_change: 0.5
