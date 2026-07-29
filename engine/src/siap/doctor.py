@@ -202,6 +202,39 @@ def check_blind_queue_view(conn: Conn, report: DoctorReport) -> None:
     )
 
 
+def check_series_sources_view(conn: Conn, report: DoctorReport) -> None:
+    """The public provenance view must expose metadata, never a price.
+
+    `series_sources` runs with definer rights so it can read `price_observations`
+    while that table stays closed to the API. That is deliberate — the dashboard
+    has to name the portals behind a number — but it means a future edit adding
+    `avg(price_idr)` would hand anon the per-source prices without any policy
+    changing. This is the guard for that.
+    """
+    columns = {
+        str(r["column_name"])
+        for r in fetch_all(
+            conn,
+            """
+            select column_name from information_schema.columns
+             where table_schema = 'public' and table_name = 'series_sources'
+            """,
+        )
+    }
+    if not columns:
+        report.add("provenance: series_sources exists", False, "view not found")
+        return
+
+    leaks = sorted(c for c in columns if "price" in c.lower() or c.lower() in {"price_idr"})
+    report.add(
+        "provenance: series_sources exposes no price",
+        not leaks,
+        f"{len(columns)} metadata column(s), no price among them"
+        if not leaks
+        else f"view exposes price column(s): {', '.join(leaks)}",
+    )
+
+
 def check_label_attribution(conn: Conn, report: DoctorReport) -> None:
     """An annotator must not be able to submit labels under another's code.
 
@@ -347,6 +380,7 @@ def run_all(conn: Conn) -> DoctorReport:
     check_rls_enabled(conn, report)
     check_policy_posture(conn, report)
     check_blind_queue_view(conn, report)
+    check_series_sources_view(conn, report)
     check_label_attribution(conn, report)
     check_reference_seeded(conn, report)
     check_anon_access_live(report, conn)

@@ -1,30 +1,51 @@
-// M0 placeholder.
-//
-// This page exists to prove the app builds and serves. It is NOT the dashboard —
-// that is built in M8, after docs/design.md sets the direction.
-//
-// It shows no prices, because there are none yet. Rendering invented numbers to
-// make a screenshot look finished is the one thing this project must never do.
+/**
+ * Region chooser — the entry point.
+ *
+ * A warung buys where it is. Asking which region first is one tap that makes
+ * every number afterwards the reader's own price rather than a national average
+ * that describes nobody. `nasional` exists as a series but is deliberately not
+ * offered here (see docs/design.md).
+ */
 
-export default function Home() {
+import Link from "next/link";
+import { fetchRegions } from "@/lib/dashboard";
+import { COPY } from "@/content/id";
+
+export const revalidate = 1800;
+
+export default async function Home() {
+  const regions = await fetchRegions();
+
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-6 px-6 py-16">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">SIAP-PANGAN</h1>
-        <p className="mt-1 text-sm text-neutral-500">Sistem Analitik Harga Pangan</p>
-      </div>
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-8 px-5 py-10">
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight">{COPY.appName}</h1>
+        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{COPY.tagline}</p>
+      </header>
 
-      <div className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
-        <p className="text-sm font-medium">Belum ada data harga</p>
-        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-          Pengumpulan data dari portal resmi belum dimulai, jadi belum ada angka yang bisa
-          ditampilkan di sini.
-        </p>
-      </div>
+      <section>
+        <h2 className="text-sm font-medium">{COPY.chooseRegion}</h2>
+        <p className="mt-1 text-sm text-neutral-500">{COPY.regionHint}</p>
 
-      <p className="text-xs text-neutral-500">
-        Tim RGB &middot; TALKS Season 2 &middot; Universitas Atma Jaya Yogyakarta
-      </p>
+        <ul className="mt-4 flex flex-col gap-2">
+          {regions.map((region) => (
+            <li key={region.slug}>
+              <Link
+                href={`/wilayah/${region.slug}`}
+                className="flex items-center justify-between rounded-lg border border-neutral-200 px-4 py-4 text-base font-medium hover:border-neutral-400 dark:border-neutral-800 dark:hover:border-neutral-600"
+              >
+                {region.display_name}
+                <span aria-hidden className="text-neutral-400">
+                  &rarr;
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <p className="text-xs leading-relaxed text-neutral-500">{COPY.notForecast}</p>
+      <p className="mt-auto text-xs text-neutral-500">{COPY.footer}</p>
     </main>
   );
 }

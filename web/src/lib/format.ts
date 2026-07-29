@@ -24,6 +24,14 @@ const shortDate = new Intl.DateTimeFormat("id-ID", {
   month: "short",
 });
 
+// Used for coverage ranges, which span years. "31 Jul - 28 Jul" without the
+// year reads as a four-day range rather than the three years it is.
+const shortDateWithYear = new Intl.DateTimeFormat("id-ID", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
 /** Parse an ISO date as local midnight, not UTC midnight.
  *
  * `new Date("2024-03-15")` is UTC, and rendering that in WIB is still 15 March
@@ -46,6 +54,10 @@ export function formatLongDate(iso: string): string {
 
 export function formatShortDate(iso: string): string {
   return shortDate.format(localDate(iso));
+}
+
+export function formatShortDateWithYear(iso: string): string {
+  return shortDateWithYear.format(localDate(iso));
 }
 
 /** Signed percentage, e.g. "+12,4%". Indonesian uses a comma for decimals. */
