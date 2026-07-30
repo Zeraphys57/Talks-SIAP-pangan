@@ -2,10 +2,16 @@ name: CI
 
 # Lint, type-check and test on every push and pull request.
 #
-# This workflow deliberately needs NO database and NO secrets. Everything it
-# runs is either static analysis or a test that operates on files in the repo,
-# so a fork can run it and a failure always means the code is wrong rather than
-# the environment being unavailable.
+# No secrets are used here, and nothing that can write to or bypass RLS is
+# provided to any job. Two public repository *variables* are:
+# NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY, because
+# `pnpm build` prerenders 48 commodity pages and therefore has to read.
+#
+# So a red run does not always mean the code is wrong: it can also mean Supabase
+# was unreachable. Read the log before assuming. That is a real cost, accepted
+# because the alternative — making the data layer degrade to an empty state so
+# the build never needs to read — would let a momentary outage ship a deploy
+# where every commodity page 404s, with nothing failing to say so.
 #
 # Ingestion and analysis run on their own schedules (added in M1), not here.
 
@@ -86,11 +92,31 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      # No Supabase keys are provided. The build must succeed without them:
-      # anything that reads live data has to degrade to an empty state rather
-      # than fail, which is also the behaviour a visitor gets when a scrape
-      # has not run yet.
+      # The build prerenders 48 commodity pages, so it reads Supabase, so it
+      # needs the anon key. It cannot be made to work without one: dashboard.ts
+      # fails loudly on a read error rather than degrading to an empty state,
+      # and that is the right call — with `dynamicParams = false`, a
+      # generateStaticParams that quietly returned [] would ship a deploy where
+      # every commodity page 404s. A red build beats a silently empty site.
+      #
+      # These are repository VARIABLES, not secrets. The anon key is already
+      # shipped in the browser bundle of the public dashboard and is constrained
+      # by RLS; hiding it here would be theatre. Nothing that bypasses RLS is
+      # provided to any job in this workflow.
+      - name: Check the build inputs exist
+        run: |
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Set the repository variables NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY under Settings -> Secrets and variables -> Actions -> Variables. Both are public values, not secrets. Without them next build fails during 'Collecting page data' with advice about .env.local that does not apply on a runner."
+            exit 1
+          fi
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+
       - name: Build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: pnpm build
 
   secrets:

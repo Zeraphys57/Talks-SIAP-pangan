@@ -202,5 +202,16 @@ returns `total_count: 0`, so every scheduled run fails on a missing
 Until they are added, the dashboard is only as fresh as the last time somebody
 ran the engine by hand.
 
+CI needs two repository **variables** as well — Settings → Secrets and variables
+→ Actions → *Variables*, not Secrets:
+
+`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+`pnpm build` prerenders 48 commodity pages, so it has to read. Both values are
+already in the public browser bundle, so they are variables rather than secrets;
+nothing that bypasses RLS is given to CI. Without them the `web` job fails on a
+step that names this fix, rather than on a `next build` error advising you to
+create a `.env.local` that a runner will never have.
+
 Dashboard pages revalidate every 30 minutes, so new alerts appear within half an
 hour of the analysis finishing without a redeploy.
