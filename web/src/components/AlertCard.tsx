@@ -56,7 +56,15 @@ export default function AlertCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-base font-medium">{alert.commodity_name}</p>
+          {/* `truncate` protects the single-column phone layout, where every name
+              in the catalogue happens to fit. In a multi-column grid the card is
+              narrower than it is on a phone, and truncating turned "Minyak goreng
+              kemasan" into "Minyak goreng kema…" — the one word that distinguishes
+              it from the curah variety on the same board. Above `sm` the name
+              wraps instead; a taller card costs nothing, a hidden name does. */}
+          <p className="truncate text-base font-medium sm:overflow-visible sm:whitespace-normal">
+            {alert.commodity_name}
+          </p>
           {!compact && (
             <p className="mt-0.5 text-sm">{alertHeadline(alert.level, alert.pctChange7d)}</p>
           )}
