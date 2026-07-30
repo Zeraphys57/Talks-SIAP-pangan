@@ -167,6 +167,19 @@ export const COPY = {
   sourceVisit: "Buka portal",
   sourcesLink: "Sumber data",
 
+  // `sources.scope` and `sources.cadence` hold engine-facing enum values ("city",
+  // "national+provincial", "daily"). Rendering them raw put English on an
+  // Indonesian page. Unknown values fall through unchanged rather than being
+  // dropped, so a new source shows something rather than a blank row.
+  sourceScopeLabel: (v: string | null) =>
+    ({
+      city: "Kota",
+      provincial: "Provinsi",
+      "national+provincial": "Nasional dan provinsi",
+    })[v ?? ""] ?? v,
+  sourceCadenceLabel: (v: string | null) =>
+    ({ daily: "Harian", weekly: "Mingguan" })[v ?? ""] ?? v,
+
   back: "Kembali",
   footer: "Tim RGB · TALKS Season 2 · Universitas Atma Jaya Yogyakarta",
 } as const;

@@ -71,18 +71,22 @@ export default async function SourcesPage() {
               {s.scope && (
                 <div className="flex gap-2">
                   <dt className="shrink-0">{COPY.sourceScope}:</dt>
-                  <dd>{s.scope}</dd>
+                  <dd>{COPY.sourceScopeLabel(s.scope)}</dd>
                 </div>
               )}
               {s.cadence && (
                 <div className="flex gap-2">
                   <dt className="shrink-0">{COPY.sourceCadence}:</dt>
-                  <dd>{s.cadence}</dd>
+                  <dd>{COPY.sourceCadenceLabel(s.cadence)}</dd>
                 </div>
               )}
             </dl>
 
-            {s.notes && <p className={`mt-2 text-xs leading-relaxed ${MUTED}`}>{s.notes}</p>}
+            {/* `sources.notes` is deliberately NOT rendered. It is engineering
+                documentation — it cites paper sections ("the fusion downgrade rule
+                (§6.5)"), records that BI's province_id numbering is not BPS's, and
+                is written in English. Useful in the repo, noise on an Indonesian
+                page read by a warung owner. docs/sources.md is where that belongs. */}
 
             {s.base_url && (
               <a
