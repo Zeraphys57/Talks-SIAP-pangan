@@ -7,20 +7,37 @@ Supabase project (`.github/workflows/daily.yml`). Only `web/` is hosted.
 
 ---
 
-## Before you deploy: rotate the credentials
+## Credentials: one to protect, one that should not exist
 
-The `service_role` key and the database password were pasted in plain text
-during development. The service role **bypasses every RLS policy in this
-project** — it can read the raw snapshot bodies, the per-source prices and the
-unblinded ground-truth pool.
+There are only two secrets in this project, and they are not equally important.
 
-Do this first, not later:
+**`DATABASE_URL` is the one that matters.** It is a direct Postgres connection
+used by every engine command and every workflow. It can `DROP TABLE`, which
+means it can destroy three years of backfill. It was pasted in plain text during
+development, so reset the password and update it in both places:
 
-1. Supabase → **Project Settings → API → service_role** → *Generate new key*
-2. Supabase → **Project Settings → Database** → reset the password
-3. Update the repo-root `.env` (`SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`)
-4. Update the GitHub Actions secrets of the same names
-5. `siap doctor` to confirm the engine still connects
+1. Supabase → **Project Settings → Database** → reset the password
+2. Update the repo-root `.env`
+3. Update the `DATABASE_URL` GitHub Actions secret
+4. `siap doctor` to confirm the engine still connects
+
+**There is no service role key, on purpose.** `grep -rn SERVICE_ROLE engine/src`
+returns nothing: `settings.py` exposes `database_url()`, `supabase_url()`,
+`supabase_anon_key()` and `contact_email()`, and no accessor for a service role.
+Writes go to Postgres directly. A credential that bypasses every RLS policy —
+raw snapshot bodies, per-source prices, the unblinded ground-truth pool — is not
+worth storing for a feature nothing uses, so it is removed rather than rotated.
+Deleting a secret is strictly stronger than replacing it.
+
+If a `SUPABASE_SERVICE_ROLE_KEY` line survives in anyone's local `.env`, delete
+it. Nothing will notice.
+
+The legacy key still exists in the Supabase project and still works for anyone
+holding a copy. Retiring it means *Disable legacy API keys*, which also retires
+`anon` — so it needs a publishable key first. `web/src/lib/supabase.ts:31`
+already returns early for non-JWT keys and its comment names
+`sb_publishable_...` explicitly, so the app is ready for that whenever the
+migration is worth doing.
 
 The **anon** key does not need rotating. It is browser-exposed by design and
 constrained by RLS; that is what it is for.
@@ -176,8 +193,14 @@ it does not turn up in search results.
 verifies the run reproduces, and closes abandoned runs. It needs these secrets
 on the repository:
 
-`DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`,
-`SIAP_CONTACT_EMAIL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+`DATABASE_URL`, `SUPABASE_URL`, `SIAP_CONTACT_EMAIL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+**These are not currently set.** `gh api repos/<owner>/<repo>/actions/secrets`
+returns `total_count: 0`, so every scheduled run fails on a missing
+`DATABASE_URL` — the schedule exists but the pipeline has never completed once.
+Until they are added, the dashboard is only as fresh as the last time somebody
+ran the engine by hand.
 
 Dashboard pages revalidate every 30 minutes, so new alerts appear within half an
 hour of the analysis finishing without a redeploy.
