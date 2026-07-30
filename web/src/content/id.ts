@@ -146,6 +146,27 @@ export const COPY = {
 
   notForecast: "Sistem ini menjelaskan apa yang sudah terjadi pada harga. Sistem ini tidak meramal harga besok.",
 
+  // "Data terakhir" is the observation date; this is the clock time the pipeline
+  // last finished. Two different facts, and a reader needs both to tell a
+  // settled-day lag apart from a system that stopped running.
+  updatedAt: "Diperbarui",
+  updatedNever: "Analisis belum pernah dijalankan atas data ini.",
+
+  // The sources page. design.md promises every screen links to a page naming the
+  // portals; this is that page.
+  sourcesPageTitle: "Sumber data",
+  sourcesPageIntro:
+    "Seluruh angka di sistem ini berasal dari portal resmi berikut. Tidak ada angka yang dikarang: kalau satu portal gagal diambil, harinya dibiarkan kosong dan kegagalannya dicatat.",
+  sourcesPageSchedule:
+    "Pengumpulan berjalan otomatis setiap hari pukul 02.00 WIB untuk data hari sebelumnya. Portal menerbitkan angka sepanjang hari kerja, jadi meminta tanggal yang belum selesai mereka laporkan akan menghasilkan hari yang tipis dan terlihat seperti lonjakan harga.",
+  sourceActive: "Aktif",
+  sourceInactive: "Tidak aktif",
+  sourceOwner: "Pengelola",
+  sourceScope: "Cakupan",
+  sourceCadence: "Frekuensi",
+  sourceVisit: "Buka portal",
+  sourcesLink: "Sumber data",
+
   back: "Kembali",
   footer: "Tim RGB · TALKS Season 2 · Universitas Atma Jaya Yogyakarta",
 } as const;

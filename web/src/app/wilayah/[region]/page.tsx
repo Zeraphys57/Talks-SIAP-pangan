@@ -11,24 +11,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { fetchBoard, fetchRegions } from "@/lib/dashboard";
+import { fetchBoard, fetchLastUpdated, fetchRegions } from "@/lib/dashboard";
 import { COPY } from "@/content/id";
+import PageFooter from "@/components/PageFooter";
 import AlertCard from "@/components/AlertCard";
 import { formatLongDate } from "@/lib/format";
+import { CARD_GRID, MUTED, PAGE } from "@/lib/ui";
 
 export const revalidate = 1800;
-
-/**
- * One column on a phone, which is the case design.md optimises for and the only
- * one that must be perfect. Wider viewports get columns rather than a wider card:
- * the card's internal layout — name left, price right, metadata beneath — was
- * sized for a thumb's reading distance, and stretching it to 1000px would leave a
- * price marooned from the name it belongs to.
- *
- * Three columns at `lg` puts all twelve commodities of a region on one screen,
- * which is the actual desktop advantage: less scrolling, not bigger type.
- */
-const CARD_GRID = "grid gap-3 sm:grid-cols-2 lg:grid-cols-3";
 
 export async function generateMetadata({
   params,
@@ -55,21 +45,21 @@ export default async function RegionPage({
   params: Promise<{ region: string }>;
 }) {
   const { region } = await params;
-  const board = await fetchBoard(region);
+  const [board, lastUpdated] = await Promise.all([fetchBoard(region), fetchLastUpdated()]);
   if (!board) notFound();
 
   const attention = board.alerts.filter((a) => a.level !== "hijau");
   const calm = board.alerts.filter((a) => a.level === "hijau");
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 px-5 py-8 sm:max-w-2xl lg:max-w-5xl">
+    <main className={PAGE.board}>
       <header>
-        <Link href="/" className="text-sm text-neutral-600 dark:text-neutral-400 underline underline-offset-2">
+        <Link href="/" className={`text-sm ${MUTED} underline underline-offset-2`}>
           &larr; {COPY.back}
         </Link>
         <h1 className="mt-3 text-xl font-semibold tracking-tight">{board.regionName}</h1>
         {board.obsDate ? (
-          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+          <p className={`mt-1 text-sm ${MUTED}`}>
             {COPY.dataFrom}: {formatLongDate(board.obsDate)}
           </p>
         ) : null}
@@ -84,7 +74,7 @@ export default async function RegionPage({
       {!board.obsDate && (
         <section className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
           <p className="text-sm font-medium">{COPY.noData}</p>
-          <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+          <p className={`mt-2 text-sm ${MUTED}`}>
             {COPY.noDataHelp}
           </p>
         </section>
@@ -109,7 +99,7 @@ export default async function RegionPage({
 
       {calm.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium text-neutral-600 dark:text-neutral-400">{COPY.normalPrices}</h2>
+          <h2 className={`text-sm font-medium ${MUTED}`}>{COPY.normalPrices}</h2>
           <div className={CARD_GRID}>
             {calm.map((alert) => (
               <AlertCard key={alert.commodity_slug} alert={alert} regionSlug={region} compact />
@@ -118,8 +108,7 @@ export default async function RegionPage({
         </section>
       )}
 
-      <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{COPY.notForecast}</p>
-      <p className="mt-auto text-xs text-neutral-600 dark:text-neutral-400">{COPY.footer}</p>
+      <PageFooter lastUpdated={lastUpdated} />
     </main>
   );
 }

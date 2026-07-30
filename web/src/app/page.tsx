@@ -8,24 +8,26 @@
  */
 
 import Link from "next/link";
-import { fetchRegions } from "@/lib/dashboard";
+import { fetchLastUpdated, fetchRegions } from "@/lib/dashboard";
 import { COPY } from "@/content/id";
+import PageFooter from "@/components/PageFooter";
+import { INTERACTION, MUTED, PAGE } from "@/lib/ui";
 
 export const revalidate = 1800;
 
 export default async function Home() {
-  const regions = await fetchRegions();
+  const [regions, lastUpdated] = await Promise.all([fetchRegions(), fetchLastUpdated()]);
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-8 px-5 py-10 sm:max-w-xl">
+    <main className={PAGE.home}>
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">{COPY.appName}</h1>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{COPY.tagline}</p>
+        <p className={`mt-1 text-sm ${MUTED}`}>{COPY.tagline}</p>
       </header>
 
       <section>
         <h2 className="text-sm font-medium">{COPY.chooseRegion}</h2>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{COPY.regionHint}</p>
+        <p className={`mt-1 text-sm ${MUTED}`}>{COPY.regionHint}</p>
 
         {/* Two columns from `sm` up: four regions fit side by side without any
             of them growing to an absurd width. Stays one column on a phone. */}
@@ -34,10 +36,10 @@ export default async function Home() {
             <li key={region.slug}>
               <Link
                 href={`/wilayah/${region.slug}`}
-                className="flex items-center justify-between rounded-lg border border-neutral-200 px-4 py-4 text-base font-medium transition-transform hover:border-neutral-400 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current motion-reduce:transition-none dark:border-neutral-800 dark:hover:border-neutral-600"
+                className={`flex items-center justify-between rounded-lg border border-neutral-200 px-4 py-4 text-base font-medium hover:border-neutral-400 dark:border-neutral-800 dark:hover:border-neutral-600 ${INTERACTION}`}
               >
                 {region.display_name}
-                <span aria-hidden className="text-neutral-400">
+                <span aria-hidden className={MUTED}>
                   &rarr;
                 </span>
               </Link>
@@ -46,8 +48,7 @@ export default async function Home() {
         </ul>
       </section>
 
-      <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{COPY.notForecast}</p>
-      <p className="mt-auto text-xs text-neutral-600 dark:text-neutral-400">{COPY.footer}</p>
+      <PageFooter lastUpdated={lastUpdated} />
     </main>
   );
 }

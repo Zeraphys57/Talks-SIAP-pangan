@@ -9,12 +9,13 @@
 
 import Link from "next/link";
 import { COPY } from "@/content/id";
+import { MUTED, PAGE } from "@/lib/ui";
 
 export default function NotFound() {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-4 px-6">
+    <main className={PAGE.message}>
       <h1 className="text-xl font-semibold tracking-tight">Halaman tidak ditemukan</h1>
-      <p className="text-sm text-neutral-600 dark:text-neutral-400">
+      <p className={`text-sm ${MUTED}`}>
         Alamat yang dibuka tidak ada. Mungkin salah ketik, atau wilayah/bahan yang dicari memang
         belum ada datanya.
       </p>
@@ -24,7 +25,7 @@ export default function NotFound() {
       >
         Ke halaman utama
       </Link>
-      <p className="mt-6 text-xs text-neutral-600 dark:text-neutral-400">{COPY.footer}</p>
+      <p className={`mt-6 text-xs ${MUTED}`}>{COPY.footer}</p>
     </main>
   );
 }

@@ -18,6 +18,7 @@
 
 import { useEffect } from "react";
 import { COPY } from "@/content/id";
+import { MUTED, PAGE } from "@/lib/ui";
 
 export default function Error({
   error,
@@ -31,9 +32,9 @@ export default function Error({
   }, [error]);
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-4 px-6">
+    <main className={PAGE.message}>
       <h1 className="text-xl font-semibold tracking-tight">Data gagal dimuat</h1>
-      <p className="text-sm text-neutral-600 dark:text-neutral-400">
+      <p className={`text-sm ${MUTED}`}>
         Sambungan ke penyimpanan data sedang bermasalah, jadi angka tidak bisa ditampilkan
         sekarang. Tidak ada angka lama yang ditampilkan sebagai pengganti.
       </p>
@@ -57,11 +58,11 @@ export default function Error({
         </a>
       </div>
       {error.digest && (
-        <p className="text-xs text-neutral-600 dark:text-neutral-400">
+        <p className={`text-xs ${MUTED}`}>
           Kode kesalahan: <span className="font-mono">{error.digest}</span>
         </p>
       )}
-      <p className="mt-6 text-xs text-neutral-600 dark:text-neutral-400">{COPY.footer}</p>
+      <p className={`mt-6 text-xs ${MUTED}`}>{COPY.footer}</p>
     </main>
   );
 }

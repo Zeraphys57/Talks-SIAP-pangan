@@ -16,6 +16,7 @@
 
 import type { CandidateContext } from "@/lib/types";
 import { formatRupiah, formatShortDate } from "@/lib/format";
+import { MUTED } from "@/lib/ui";
 
 const W = 720;
 const H = 260;
@@ -34,7 +35,7 @@ export default function PriceWindow({ context }: Props) {
 
   if (priced.length < 2) {
     return (
-      <div className="flex h-40 items-center justify-center rounded-lg border border-dashed border-neutral-300 px-4 text-center text-sm text-neutral-600 dark:text-neutral-400 dark:border-neutral-700">
+      <div className={`flex h-40 items-center justify-center rounded-lg border border-dashed border-neutral-300 px-4 text-center text-sm ${MUTED} dark:border-neutral-700`}>
         Data harga di sekitar tanggal ini terlalu sedikit untuk digambar.
       </div>
     );
@@ -190,7 +191,7 @@ export default function PriceWindow({ context }: Props) {
         </text>
       </svg>
 
-      <figcaption className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-600 dark:text-neutral-400">
+      <figcaption className={`mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs ${MUTED}`}>
         {mean !== null ? (
           <span>
             <span className="mr-1 inline-block h-2 w-3 rounded-sm bg-amber-100 align-middle dark:bg-amber-500/20" />

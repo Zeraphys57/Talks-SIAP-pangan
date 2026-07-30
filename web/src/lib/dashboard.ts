@@ -97,6 +97,55 @@ async function latestFusionRun(): Promise<number | null> {
 }
 
 /**
+ * When the pipeline last finished successfully, as an ISO timestamp.
+ *
+ * The observation date already on every board answers "which day are these
+ * prices from". This answers "is this thing still running", which the reader
+ * otherwise cannot distinguish from a settled-day lag. Null if no fusion run has
+ * ever succeeded, in which case the caller should say nothing rather than guess.
+ */
+export async function fetchLastUpdated(): Promise<string | null> {
+  const { data, error } = await db
+    .from("analysis_runs")
+    .select("finished_at")
+    .eq("run_type", "fusion")
+    .eq("status", "success")
+    .not("finished_at", "is", null)
+    .order("finished_at", { ascending: false })
+    .limit(1);
+  if (error) throw new Error(error.message);
+  return data?.length ? (data[0].finished_at as string) : null;
+}
+
+export type SourcePortal = {
+  slug: string;
+  display_name: string;
+  owner: string | null;
+  base_url: string | null;
+  scope: string | null;
+  cadence: string | null;
+  is_active: boolean;
+  notes: string | null;
+};
+
+/**
+ * Every portal this project draws from, active or not.
+ *
+ * Inactive ones are included on purpose. `panelharga` is disabled because its
+ * endpoints fail upstream, and a reader comparing this list against the proposal
+ * is entitled to see that it was attempted rather than quietly dropped.
+ */
+export async function fetchPortals(): Promise<SourcePortal[]> {
+  const { data, error } = await db
+    .from("sources")
+    .select("slug, display_name, owner, base_url, scope, cadence, is_active, notes")
+    .order("is_active", { ascending: false })
+    .order("slug");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as SourcePortal[];
+}
+
+/**
  * The most recent settled date for one region, or null if it has none.
  *
  * "Settled" means strictly before today in WIB. See the module comment: today's

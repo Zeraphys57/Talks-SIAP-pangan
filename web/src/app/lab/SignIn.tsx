@@ -12,6 +12,7 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { MUTED } from "@/lib/ui";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
@@ -39,7 +40,7 @@ export default function SignIn() {
     <main className="mx-auto flex min-h-dvh max-w-sm flex-col justify-center gap-6 px-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">SIAP-PANGAN &middot; Lab</h1>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+        <p className={`mt-1 text-sm ${MUTED}`}>
           Pelabelan ground truth. Khusus anggota tim.
         </p>
       </div>
@@ -84,7 +85,7 @@ export default function SignIn() {
         </button>
       </form>
 
-      <p className="text-xs text-neutral-600 dark:text-neutral-400">
+      <p className={`text-xs ${MUTED}`}>
         Belum punya akun? Akun annotator dibuat oleh koordinator tim, bukan lewat pendaftaran
         sendiri.
       </p>

@@ -17,20 +17,7 @@ import Link from "next/link";
 import type { AlertRow } from "@/lib/dashboard";
 import { formatPercent, formatRupiah } from "@/lib/format";
 import { COPY, LEVEL_LABEL, LEVEL_MARK, alertHeadline, direction } from "@/content/id";
-
-/**
- * `hover:` is dead code on the device this is built for. `active:` is the one
- * that fires under a thumb, and on a slow connection the gap between the tap and
- * the next page is long enough that silence reads as a broken app.
- *
- * The feedback is a scale rather than a colour, so the level tones below stay
- * exactly as chosen — a background flash would have to be defined per tone and
- * would fight the one signal this card exists to carry. The focus ring inherits
- * `currentColor`, which is already the high-contrast foreground in both modes.
- */
-const INTERACTION =
-  "transition-transform active:scale-[0.99] motion-reduce:transition-none " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current";
+import { INTERACTION, MUTED } from "@/lib/ui";
 
 const TONE: Record<AlertRow["level"], string> = {
   merah: "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/30",
@@ -76,12 +63,12 @@ export default function AlertCard({
                 else per kilogram, so the unit is part of what the number means,
                 not a footnote to it. design.md is explicit that the one number on
                 the page must not be ambiguous. */}
-            <span className="ml-1 text-sm font-normal text-neutral-600 dark:text-neutral-400">
+            <span className={`ml-1 text-sm font-normal ${MUTED}`}>
               /{alert.canonical_unit}
             </span>
           </p>
           {alert.pctChange7d !== null && dir !== "datar" && (
-            <p className="text-sm tabular-nums text-neutral-600 dark:text-neutral-400">
+            <p className={`text-sm tabular-nums ${MUTED}`}>
               {/* Arrow AND sign AND word: three redundant encodings, because a
                   small coloured triangle alone is the least reliable of them. */}
               <span aria-hidden>{dir === "naik" ? "▲" : "▼"}</span>{" "}
@@ -92,7 +79,7 @@ export default function AlertCard({
         </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-600 dark:text-neutral-400">
+      <div className={`mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs ${MUTED}`}>
         <span>
           <span aria-hidden className="mr-1">
             {LEVEL_MARK[alert.level]}

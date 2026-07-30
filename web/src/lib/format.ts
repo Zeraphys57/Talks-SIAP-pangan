@@ -60,6 +60,33 @@ export function formatShortDateWithYear(iso: string): string {
   return shortDateWithYear.format(localDate(iso));
 }
 
+/**
+ * When the pipeline last finished, as day, date and clock time in WIB.
+ *
+ * Distinct from `formatLongDate`, which renders an observation *date* — the day
+ * the prices belong to. This renders a *timestamp*, and the difference is the
+ * whole point: a board reading "Data terakhir: Rabu, 29 Juli" tells you nothing
+ * about whether the system is still running. Somebody opening it on 2 August has
+ * no way to tell a settled-day lag from a pipeline that died three days ago.
+ *
+ * Pinned to Asia/Jakarta rather than the visitor's zone. The analysis runs on WIB
+ * and the audience is in WIB; rendering 02:14 as 19:14 the previous day would be
+ * accurate and useless.
+ */
+const updatedAt = new Intl.DateTimeFormat("id-ID", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  timeZone: "Asia/Jakarta",
+});
+
+export function formatUpdatedAt(iso: string): string {
+  return `${updatedAt.format(new Date(iso))} WIB`;
+}
+
 /** Signed percentage, e.g. "+12,4%". Indonesian uses a comma for decimals. */
 export function formatPercent(fraction: number): string {
   const sign = fraction > 0 ? "+" : "";

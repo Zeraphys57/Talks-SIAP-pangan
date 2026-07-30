@@ -27,6 +27,7 @@ import { formatLongDate, formatPercent, formatRupiah } from "@/lib/format";
 import type { Candidate, Label, Progress } from "@/lib/types";
 import PriceWindow from "./PriceWindow";
 import SignIn from "./SignIn";
+import { MUTED } from "@/lib/ui";
 
 const BATCH = 20;
 const REFILL_AT = 4;
@@ -176,7 +177,7 @@ export default function LabPage() {
     return (
       <Centered>
         <p className="font-medium">Tidak bisa memuat antrean.</p>
-        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">{fatal}</p>
+        <p className={`mt-2 text-sm ${MUTED}`}>{fatal}</p>
         <SignOut />
       </Centered>
     );
@@ -188,7 +189,7 @@ export default function LabPage() {
     return (
       <Centered>
         <p className="font-medium">Akun ini belum terdaftar sebagai annotator.</p>
-        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+        <p className={`mt-2 text-sm ${MUTED}`}>
           Kode annotator diberikan oleh koordinator tim. Sampai kode itu terdaftar, tidak ada
           kandidat yang bisa dilihat maupun dilabeli.
         </p>
@@ -200,7 +201,7 @@ export default function LabPage() {
     return (
       <Centered>
         <p className="text-lg font-semibold">Selesai.</p>
-        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+        <p className={`mt-2 text-sm ${MUTED}`}>
           {progress.labeled} dari {progress.pool} kandidat sudah kamu labeli. Kappa dihitung setelah
           kedua annotator selesai.
         </p>
@@ -226,14 +227,14 @@ export default function LabPage() {
           <h1 className="text-sm font-semibold tracking-tight">
             SIAP-PANGAN &middot; Pelabelan ground truth
           </h1>
-          <p className="text-xs text-neutral-600 dark:text-neutral-400">
+          <p className={`text-xs ${MUTED}`}>
             Annotator <span className="font-mono">{progress.annotator_code}</span>
           </p>
         </div>
         <div className="flex items-center gap-3">
           <Link
             href="/lab/sus"
-            className="text-xs text-neutral-600 dark:text-neutral-400 underline underline-offset-2"
+            className={`text-xs ${MUTED} underline underline-offset-2`}
           >
             Form SUS
           </Link>
@@ -284,7 +285,7 @@ export default function LabPage() {
               angkanya terlihat seperti salah input dan bukan pergerakan pasar. Pakai ini kalau
               memang tidak yakin; menebak akan merusak angka kesepakatan.
             </p>
-            <p className="text-neutral-600 dark:text-neutral-400">
+            <p className={`${MUTED}`}>
               Kerjakan sendiri. Jangan mendiskusikan kandidat dengan annotator lain sampai kedua
               daftar selesai — nilai kappa hanya bermakna kalau kedua penilaian independen.
             </p>
@@ -296,19 +297,19 @@ export default function LabPage() {
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <div>
             <h2 className="text-lg font-semibold tracking-tight">{candidate.commodity_name}</h2>
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">
+            <p className={`text-sm ${MUTED}`}>
               {candidate.region_name} &middot; {formatLongDate(candidate.obs_date)}
             </p>
           </div>
           <div className="text-right">
             <p className="text-lg font-semibold tabular-nums">
               {formatRupiah(focusPoint?.price ?? null)}
-              <span className="ml-1 text-sm font-normal text-neutral-600 dark:text-neutral-400">
+              <span className={`ml-1 text-sm font-normal ${MUTED}`}>
                 /{candidate.canonical_unit}
               </span>
             </p>
             {deviation !== null && (
-              <p className="text-sm tabular-nums text-neutral-600 dark:text-neutral-400">
+              <p className={`text-sm tabular-nums ${MUTED}`}>
                 {formatPercent(deviation)} dari rata-rata 30 hari
               </p>
             )}
@@ -365,7 +366,7 @@ export default function LabPage() {
               href={`https://www.google.com/search?tbm=nws&q=${newsQuery}`}
               target="_blank"
               rel="noreferrer noopener"
-              className="text-xs text-neutral-600 dark:text-neutral-400 underline underline-offset-2"
+              className={`text-xs ${MUTED} underline underline-offset-2`}
             >
               cari berita bulan itu &rarr;
             </a>
@@ -379,7 +380,7 @@ export default function LabPage() {
             className="rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
           />
           {needsEvidence && (
-            <span className="text-xs text-neutral-600 dark:text-neutral-400">
+            <span className={`text-xs ${MUTED}`}>
               Label &ldquo;tidak wajar&rdquo; harus punya bukti dari luar sistem ini. Kalau tidak
               ketemu apa-apa, itu sendiri sebuah temuan — pilih &ldquo;Ragu&rdquo;.
             </span>
@@ -413,7 +414,7 @@ export default function LabPage() {
           {saving ? "Menyimpan…" : "Simpan & lanjut"}
           <span className="ml-2 text-xs opacity-60">Enter</span>
         </button>
-        <p className="text-center text-xs text-neutral-600 dark:text-neutral-400">
+        <p className={`text-center text-xs ${MUTED}`}>
           Label yang sudah disimpan tidak bisa diubah. Itu disengaja: penilaian yang bisa
           direvisi diam-diam bukan lagi penilaian independen.
         </p>
@@ -437,8 +438,8 @@ function SignOut({ compact = false }: { compact?: boolean }) {
       onClick={() => void supabase.auth.signOut()}
       className={
         compact
-          ? "text-xs text-neutral-600 dark:text-neutral-400 underline underline-offset-2"
-          : "mt-6 text-sm text-neutral-600 dark:text-neutral-400 underline underline-offset-2"
+          ? `text-xs ${MUTED} underline underline-offset-2`
+          : `mt-6 text-sm ${MUTED} underline underline-offset-2`
       }
     >
       Keluar

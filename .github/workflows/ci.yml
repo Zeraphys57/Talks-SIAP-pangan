@@ -142,6 +142,15 @@ jobs:
       - name: Assert the guard itself still catches a leak
         run: python3 scripts/assert_no_service_role.py --self-test
 
+      # The muted text colour was written inline in 52 places and was 4.17:1 on
+      # the dark background — below WCAG AA — because there was no single
+      # definition to diverge from. web/src/lib/ui.ts is now that definition.
+      - name: Assert the muted colour is not written inline
+        run: python3 scripts/assert_ui_tokens.py
+
+      - name: Assert that guard still catches a violation
+        run: python3 scripts/assert_ui_tokens.py --self-test
+
       - name: Assert no .env file is committed
         run: |
           if git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example'; then
