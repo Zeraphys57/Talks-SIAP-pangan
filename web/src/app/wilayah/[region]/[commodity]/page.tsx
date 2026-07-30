@@ -86,13 +86,13 @@ export default async function CommodityPage({
       <header>
         <Link
           href={`/wilayah/${region}`}
-          className="text-sm text-neutral-500 underline underline-offset-2"
+          className="text-sm text-neutral-600 dark:text-neutral-400 underline underline-offset-2"
         >
           &larr; {detail.regionName}
         </Link>
         <h1 className="mt-3 text-xl font-semibold tracking-tight">{detail.name}</h1>
         {detail.obsDate && (
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
             {COPY.dataFrom}: {formatLongDate(detail.obsDate)}
           </p>
         )}
@@ -102,12 +102,12 @@ export default async function CommodityPage({
         <div className="flex items-baseline justify-between gap-3">
           <p className="text-2xl font-semibold tabular-nums">
             {formatRupiah(focus?.price ?? null)}
-            <span className="ml-1 text-sm font-normal text-neutral-500">/{detail.unit}</span>
+            <span className="ml-1 text-sm font-normal text-neutral-600 dark:text-neutral-400">/{detail.unit}</span>
           </p>
           {deviation !== null && (
             <p className="text-right text-sm tabular-nums text-neutral-600 dark:text-neutral-400">
               {formatPercent(deviation)}
-              <span className="block text-xs text-neutral-500">{COPY.vsBaseline}</span>
+              <span className="block text-xs text-neutral-600 dark:text-neutral-400">{COPY.vsBaseline}</span>
             </p>
           )}
         </div>
@@ -117,7 +117,7 @@ export default async function CommodityPage({
             <p className="mt-3 text-sm font-medium">
               {alertHeadline(alert.level, alert.pctChange7d)}
             </p>
-            <p className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-neutral-500">
+            <p className="mt-1 flex flex-wrap items-center gap-x-3 text-xs text-neutral-600 dark:text-neutral-400">
               <span>
                 <span aria-hidden className="mr-1">
                   {LEVEL_MARK[alert.level]}
@@ -130,7 +130,7 @@ export default async function CommodityPage({
               {LEVEL_MEANING[alert.level]}
             </p>
             {alert.reason && REASON_COPY[alert.reason] && (
-              <p className="mt-2 text-xs text-neutral-500">{REASON_COPY[alert.reason]}</p>
+              <p className="mt-2 text-xs text-neutral-600 dark:text-neutral-400">{REASON_COPY[alert.reason]}</p>
             )}
             {advice && (
               <p className="mt-3 rounded-md bg-neutral-100 px-3 py-2 text-sm dark:bg-neutral-900">
@@ -143,8 +143,8 @@ export default async function CommodityPage({
 
       <section>
         <PriceChart series={detail.series} baselineMean={detail.baselineMean} />
-        <p className="mt-2 text-xs text-neutral-500">{COPY.chartCaption}</p>
-        {hasImputed && <p className="mt-1 text-xs text-neutral-500">{COPY.imputedNote}</p>}
+        <p className="mt-2 text-xs text-neutral-600 dark:text-neutral-400">{COPY.chartCaption}</p>
+        {hasImputed && <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">{COPY.imputedNote}</p>}
       </section>
 
       <section>
@@ -161,12 +161,12 @@ export default async function CommodityPage({
                 </li>
               ))}
             </ul>
-            <p className="mt-2 text-xs leading-relaxed text-neutral-500">
+            <p className="mt-2 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
               {COPY.riskyWeeksHelp}
             </p>
           </>
         ) : (
-          <p className="mt-1 text-sm text-neutral-500">{COPY.noRiskyWeeks}</p>
+          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{COPY.noRiskyWeeks}</p>
         )}
       </section>
 
@@ -174,13 +174,13 @@ export default async function CommodityPage({
         <section>
           <h2 className="text-sm font-medium">{COPY.zoneTitle}</h2>
           <p className="mt-1 text-sm">{zone.label}</p>
-          <p className="mt-1 text-xs leading-relaxed text-neutral-500">{zone.meaning}</p>
+          <p className="mt-1 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{zone.meaning}</p>
         </section>
       )}
 
       <section>
         <h2 className="text-sm font-medium">{COPY.sourcesTitle}</h2>
-        <p className="mt-1 text-xs leading-relaxed text-neutral-500">{COPY.sourcesHelp}</p>
+        <p className="mt-1 text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{COPY.sourcesHelp}</p>
         <ul className="mt-2 flex flex-col gap-2">
           {detail.sources.map((s) => (
             <li
@@ -195,7 +195,7 @@ export default async function CommodityPage({
               >
                 {s.source_name}
               </a>
-              <p className="mt-0.5 tabular-nums text-neutral-500">
+              <p className="mt-0.5 tabular-nums text-neutral-600 dark:text-neutral-400">
                 {s.observations.toLocaleString("id-ID")} pencatatan &middot;{" "}
                 {formatShortDateWithYear(s.first_date)} &ndash;{" "}
                 {formatShortDateWithYear(s.last_date)}
@@ -205,8 +205,8 @@ export default async function CommodityPage({
         </ul>
       </section>
 
-      <p className="text-xs leading-relaxed text-neutral-500">{COPY.notForecast}</p>
-      <p className="mt-auto text-xs text-neutral-500">{COPY.footer}</p>
+      <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{COPY.notForecast}</p>
+      <p className="mt-auto text-xs text-neutral-600 dark:text-neutral-400">{COPY.footer}</p>
     </main>
   );
 }

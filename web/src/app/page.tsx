@@ -25,14 +25,14 @@ export default async function Home() {
 
       <section>
         <h2 className="text-sm font-medium">{COPY.chooseRegion}</h2>
-        <p className="mt-1 text-sm text-neutral-500">{COPY.regionHint}</p>
+        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{COPY.regionHint}</p>
 
         <ul className="mt-4 flex flex-col gap-2">
           {regions.map((region) => (
             <li key={region.slug}>
               <Link
                 href={`/wilayah/${region.slug}`}
-                className="flex items-center justify-between rounded-lg border border-neutral-200 px-4 py-4 text-base font-medium hover:border-neutral-400 dark:border-neutral-800 dark:hover:border-neutral-600"
+                className="flex items-center justify-between rounded-lg border border-neutral-200 px-4 py-4 text-base font-medium transition-transform hover:border-neutral-400 active:scale-[0.99] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current motion-reduce:transition-none dark:border-neutral-800 dark:hover:border-neutral-600"
               >
                 {region.display_name}
                 <span aria-hidden className="text-neutral-400">
@@ -44,8 +44,8 @@ export default async function Home() {
         </ul>
       </section>
 
-      <p className="text-xs leading-relaxed text-neutral-500">{COPY.notForecast}</p>
-      <p className="mt-auto text-xs text-neutral-500">{COPY.footer}</p>
+      <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{COPY.notForecast}</p>
+      <p className="mt-auto text-xs text-neutral-600 dark:text-neutral-400">{COPY.footer}</p>
     </main>
   );
 }

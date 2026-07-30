@@ -52,12 +52,12 @@ export default async function RegionPage({
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 px-5 py-8">
       <header>
-        <Link href="/" className="text-sm text-neutral-500 underline underline-offset-2">
+        <Link href="/" className="text-sm text-neutral-600 dark:text-neutral-400 underline underline-offset-2">
           &larr; {COPY.back}
         </Link>
         <h1 className="mt-3 text-xl font-semibold tracking-tight">{board.regionName}</h1>
         {board.obsDate ? (
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
             {COPY.dataFrom}: {formatLongDate(board.obsDate)}
           </p>
         ) : null}
@@ -95,15 +95,15 @@ export default async function RegionPage({
 
       {calm.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium text-neutral-500">{COPY.normalPrices}</h2>
+          <h2 className="text-sm font-medium text-neutral-600 dark:text-neutral-400">{COPY.normalPrices}</h2>
           {calm.map((alert) => (
             <AlertCard key={alert.commodity_slug} alert={alert} regionSlug={region} compact />
           ))}
         </section>
       )}
 
-      <p className="text-xs leading-relaxed text-neutral-500">{COPY.notForecast}</p>
-      <p className="mt-auto text-xs text-neutral-500">{COPY.footer}</p>
+      <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{COPY.notForecast}</p>
+      <p className="mt-auto text-xs text-neutral-600 dark:text-neutral-400">{COPY.footer}</p>
     </main>
   );
 }

@@ -112,7 +112,7 @@ export default function SusPage() {
   return (
     <main className="mx-auto flex min-h-dvh max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6">
       <header>
-        <Link href="/lab" className="text-sm text-neutral-500 underline underline-offset-2">
+        <Link href="/lab" className="text-sm text-neutral-600 dark:text-neutral-400 underline underline-offset-2">
           &larr; Kembali ke pelabelan
         </Link>
         <h1 className="mt-3 text-lg font-semibold tracking-tight">{SUS_COPY.title}</h1>
@@ -148,15 +148,15 @@ export default function SusPage() {
           />
         </label>
       </section>
-      <p className="-mt-4 text-xs text-neutral-500">{SUS_COPY.respondentCodeHint}</p>
+      <p className="-mt-4 text-xs text-neutral-600 dark:text-neutral-400">{SUS_COPY.respondentCodeHint}</p>
 
-      <p className="text-xs text-neutral-500">{SUS_COPY.scaleHint}</p>
+      <p className="text-xs text-neutral-600 dark:text-neutral-400">{SUS_COPY.scaleHint}</p>
 
       <ol className="flex flex-col gap-5">
         {SUS_ITEMS.map((item) => (
           <li key={item.number} className="flex flex-col gap-2">
             <p className="text-sm">
-              <span className="mr-2 font-mono text-xs text-neutral-500">{item.number}.</span>
+              <span className="mr-2 font-mono text-xs text-neutral-600 dark:text-neutral-400">{item.number}.</span>
               {item.text}
             </p>
             <div className="flex items-end gap-1">
@@ -199,7 +199,7 @@ export default function SusPage() {
           onChange={(e) => setFeedback(e.target.value)}
           className="rounded-md border border-neutral-300 px-3 py-2 text-sm dark:border-neutral-700 dark:bg-neutral-900"
         />
-        <span className="text-xs text-neutral-500">{SUS_COPY.openFeedbackHint}</span>
+        <span className="text-xs text-neutral-600 dark:text-neutral-400">{SUS_COPY.openFeedbackHint}</span>
       </label>
 
       {error && (
@@ -208,7 +208,7 @@ export default function SusPage() {
         </p>
       )}
       {!answered && (
-        <p className="text-sm text-neutral-500">{SUS_COPY.incomplete}</p>
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">{SUS_COPY.incomplete}</p>
       )}
 
       <button

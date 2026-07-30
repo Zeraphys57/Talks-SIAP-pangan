@@ -18,6 +18,20 @@ import type { AlertRow } from "@/lib/dashboard";
 import { formatPercent, formatRupiah } from "@/lib/format";
 import { COPY, LEVEL_LABEL, LEVEL_MARK, alertHeadline, direction } from "@/content/id";
 
+/**
+ * `hover:` is dead code on the device this is built for. `active:` is the one
+ * that fires under a thumb, and on a slow connection the gap between the tap and
+ * the next page is long enough that silence reads as a broken app.
+ *
+ * The feedback is a scale rather than a colour, so the level tones below stay
+ * exactly as chosen — a background flash would have to be defined per tone and
+ * would fight the one signal this card exists to carry. The focus ring inherits
+ * `currentColor`, which is already the high-contrast foreground in both modes.
+ */
+const INTERACTION =
+  "transition-transform active:scale-[0.99] motion-reduce:transition-none " +
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current";
+
 const TONE: Record<AlertRow["level"], string> = {
   merah: "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/30",
   kuning: "border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30",
@@ -38,7 +52,7 @@ export default function AlertCard({
   return (
     <Link
       href={`/wilayah/${regionSlug}/${alert.commodity_slug}`}
-      className={`block rounded-lg border p-4 ${TONE[alert.level]}`}
+      className={`block rounded-lg border p-4 ${INTERACTION} ${TONE[alert.level]}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -50,7 +64,11 @@ export default function AlertCard({
         <div className="shrink-0 text-right">
           <p className="text-base font-semibold tabular-nums">
             {formatRupiah(alert.price)}
-            <span className="ml-1 text-xs font-normal text-neutral-500">
+            {/* Not text-xs: minyak goreng is priced per litre and everything
+                else per kilogram, so the unit is part of what the number means,
+                not a footnote to it. design.md is explicit that the one number on
+                the page must not be ambiguous. */}
+            <span className="ml-1 text-sm font-normal text-neutral-600 dark:text-neutral-400">
               /{alert.canonical_unit}
             </span>
           </p>
@@ -66,7 +84,7 @@ export default function AlertCard({
         </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-600 dark:text-neutral-400">
         <span>
           <span aria-hidden className="mr-1">
             {LEVEL_MARK[alert.level]}

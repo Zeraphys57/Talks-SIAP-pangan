@@ -34,7 +34,7 @@ export default function PriceChart({
   const priced = series.filter((p) => p.price !== null);
   if (priced.length < 2) {
     return (
-      <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-neutral-300 px-4 text-center text-sm text-neutral-500 dark:border-neutral-700">
+      <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-neutral-300 px-4 text-center text-sm text-neutral-600 dark:text-neutral-400 dark:border-neutral-700">
         Belum cukup data harga untuk digambar.
       </div>
     );

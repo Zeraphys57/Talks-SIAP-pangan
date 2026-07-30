@@ -57,11 +57,11 @@ export default function Error({
         </a>
       </div>
       {error.digest && (
-        <p className="text-xs text-neutral-500">
+        <p className="text-xs text-neutral-600 dark:text-neutral-400">
           Kode kesalahan: <span className="font-mono">{error.digest}</span>
         </p>
       )}
-      <p className="mt-6 text-xs text-neutral-500">{COPY.footer}</p>
+      <p className="mt-6 text-xs text-neutral-600 dark:text-neutral-400">{COPY.footer}</p>
     </main>
   );
 }
