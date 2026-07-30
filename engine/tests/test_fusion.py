@@ -65,9 +65,16 @@ def test_both_flagged_earns_the_bonus_but_stays_capped() -> None:
     assert saturated == 1.0, "the bonus must not push A above 1"
 
 
-def test_anomaly_is_zero_when_neither_detector_scored() -> None:
+def test_anomaly_is_undefined_when_neither_detector_scored() -> None:
+    """None, not 0.0 — the distinction the fourth level is built on.
+
+    A = 0 says both detectors looked and found nothing unusual. A = None says
+    neither could look: too little history in the window, or a baseline too
+    stale to divide by. Returning 0.0 for the second made absence of evidence
+    render as evidence of safety.
+    """
     a, both = anomaly_term(FusionInput(), _cfg())
-    assert a == 0.0 and both is False
+    assert a is None and both is False
 
 
 # ---------------------------------------------------------------------------
@@ -220,6 +227,56 @@ def test_a_quiet_day_is_tenang_and_recommends_nothing_alarming() -> None:
     result = fuse(FusionInput(norm_zscore=0.05, pct_change_7d=0.002, n_sources_reporting=3), cfg)
     assert result.level == "tenang"
     assert result.recommendation_id == cfg.recommendations["tenang"]
+
+
+# ---------------------------------------------------------------------------
+# The fourth level — absence of a judgement, not a quiet one
+# ---------------------------------------------------------------------------
+def test_an_unscored_date_does_not_fall_through_to_the_calmest_band() -> None:
+    """41.31% of nasional dates used to render as `hijau` on this path."""
+    cfg = _cfg()
+    result = fuse(FusionInput(n_sources_reporting=3, n_sources_flagging=0), cfg)
+    assert result.level == "belum_dapat_dinilai"
+    assert result.score is None, "an unscored date must not carry a number"
+    assert result.components["A"] is None
+
+
+def test_an_unscored_date_offers_no_recommendation() -> None:
+    """Advice derived from an absent observation is the thing to avoid."""
+    cfg = _cfg()
+    result = fuse(FusionInput(), cfg)
+    assert result.recommendation_id is None
+    assert "belum_dapat_dinilai" not in cfg.recommendations
+
+
+def test_movement_alone_does_not_make_a_date_scorable() -> None:
+    """M is observable without either detector; F is not.
+
+    A 20% weekly move on a date no detector could score is still a date no
+    detector could score. Letting M carry the row would produce a level from a
+    quarter of the model and present it as the whole.
+    """
+    cfg = _cfg()
+    result = fuse(FusionInput(pct_change_7d=0.20, n_sources_reporting=2), cfg)
+    assert result.level == "belum_dapat_dinilai"
+    # The observable parts are still recorded — they are the audit trail.
+    assert result.components["M"] == pytest.approx(1.0)
+
+
+def test_one_detector_is_enough_to_score() -> None:
+    """The gate is on *neither* detector scoring, not on both."""
+    cfg = _cfg()
+    result = fuse(FusionInput(norm_zscore=0.9, n_sources_reporting=2), cfg)
+    assert result.level != "belum_dapat_dinilai"
+    assert result.score is not None
+
+
+def test_assign_level_propagates_the_missing_score() -> None:
+    cfg = _cfg()
+    inp = FusionInput(n_sources_reporting=3, n_sources_flagging=3)
+    level, reason = assign_level(None, 1.0, inp, cfg)
+    assert level == "belum_dapat_dinilai"
+    assert reason == "no_detector_score"
 
 
 def test_score_is_bounded() -> None:

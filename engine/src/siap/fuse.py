@@ -263,7 +263,9 @@ def alert_board(conn: Conn, run_id: int, obs_date: Any = None) -> list[dict[str,
          where a.run_id = %s
            and a.obs_date = coalesce(
                  %s, (select max(obs_date) from public.alerts where run_id = %s))
-         order by a.fusion_score desc, rg.slug, c.slug
+         -- `nulls last`: under DESC Postgres sorts NULLs first, which would
+         -- open the board with every row the detectors could not score.
+         order by a.fusion_score desc nulls last, rg.slug, c.slug
         """,
         (run_id, obs_date, run_id),
     )
@@ -287,7 +289,7 @@ def strongest_alert(conn: Conn, run_id: int) -> dict[str, Any] | None:
                  on p.commodity_id = a.commodity_id and p.region_id = a.region_id
                 and p.obs_date = a.obs_date - 7
          where a.run_id = %s
-         order by a.fusion_score desc
+         order by a.fusion_score desc nulls last
          limit 1
         """,
         (run_id,),

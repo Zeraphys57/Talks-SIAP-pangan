@@ -278,20 +278,31 @@ def weight_sensitivity(
         )
 
     baseline_results = [fusion_module.fuse(inp, cfg) for inp in inputs]
-    baseline_scores = np.array([r.score for r in baseline_results])
     baseline_levels = [r.level for r in baseline_results]
+
+    # Rows the detectors could not score have no F under any weight vector, so
+    # they cannot participate in a rank correlation between weight vectors.
+    # Which rows those are does not depend on the weights — A is missing or it
+    # is not — so one mask, computed once, applies to every perturbation.
+    scored = [i for i, r in enumerate(baseline_results) if r.score is not None]
+    if not scored:
+        raise ValueError(
+            "no date in this run produced a fusion score; every row is "
+            "belum_dapat_dinilai, so weight sensitivity is undefined"
+        )
+    baseline_scores = np.array([baseline_results[i].score for i in scored], dtype=float)
 
     # A term that never varies contributes nothing to the ranking, and its
     # weight then acts only as a global attenuator of the score against fixed
     # thresholds. Spearman would report a flawless 1.0000 for that weight, which
     # reads as "robust" and actually means "inert". Detecting it here is the
     # difference between the two readings.
-    degenerate = _constant_terms(baseline_results)
+    degenerate = _constant_terms([baseline_results[i] for i in scored])
 
     def summarise(
         name: str, delta: float, results: list[fusion_module.FusionResult], value: float
     ) -> WeightPoint:
-        scores = np.array([r.score for r in results])
+        scores = np.array([results[i].score for i in scored], dtype=float)
         levels = [r.level for r in results]
         return WeightPoint(
             weight=name,
@@ -300,7 +311,7 @@ def weight_sensitivity(
             skipped=None,
             spearman=_spearman(baseline_scores, scores),
             level_changes=sum(1 for a, b in zip(baseline_levels, levels, strict=True) if a != b),
-            n_scored=len(results),
+            n_scored=len(scored),
             siaga=levels.count("siaga"),
             waspada=levels.count("waspada"),
             tenang=levels.count("tenang"),

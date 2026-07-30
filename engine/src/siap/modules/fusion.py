@@ -49,6 +49,10 @@ log = logging.getLogger(__name__)
 
 LEVELS = ("tenang", "waspada", "siaga")
 
+# Outside the ordering above, deliberately. It is not a fourth severity between
+# or beyond the others; it is the absence of a judgement.
+UNSCORED = "belum_dapat_dinilai"
+
 
 @dataclass
 class FusionInput:
@@ -69,23 +73,35 @@ class FusionInput:
 
 @dataclass
 class FusionResult:
-    score: float
+    #: None exactly when `level` is `belum_dapat_dinilai`. A score of 0 is
+    #: meaningful for a scored date and meaningless for an unscored one, so the
+    #: two must not be distinguishable only by the number.
+    score: float | None
     level: str
     components: dict[str, Any] = field(default_factory=dict)
     corroboration: float | None = None
     recommendation_id: str | None = None
 
 
-def anomaly_term(inp: FusionInput, cfg: FusionConfig) -> tuple[float, bool]:
+def anomaly_term(inp: FusionInput, cfg: FusionConfig) -> tuple[float | None, bool]:
     """A = max(scores) * (1 + bonus if both flagged), capped at 1.
+
+    Returns **None when neither detector scored the date**, which is not the
+    same as returning 0.0. A = 0 says "both detectors looked and found nothing
+    unusual". A = None says "neither detector could look at all" — the z-score
+    had too little history in the window, or its baseline was too stale to
+    divide by. Collapsing the second into the first is how absence of evidence
+    became evidence of safety on 41.31% of `nasional` dates.
 
     The bonus is small because agreement is rare: M3 measured the two detectors
     overlapping on only 9.7% of flags, which is exactly why agreement is worth
     something.
     """
     scores = [s for s in (inp.norm_zscore, inp.norm_iforest) if s is not None]
-    base = max(scores) if scores else 0.0
     both = bool(inp.zscore_flagged and inp.iforest_flagged)
+    if not scores:
+        return None, both
+    base = max(scores)
     if both:
         base *= 1.0 + cfg.components.both_flagged_bonus
     return min(base, 1.0), both
@@ -121,9 +137,17 @@ def corroboration_term(inp: FusionInput) -> float | None:
 
 
 def assign_level(
-    score: float, corroboration: float | None, inp: FusionInput, cfg: FusionConfig
+    score: float | None, corroboration: float | None, inp: FusionInput, cfg: FusionConfig
 ) -> tuple[str, str | None]:
-    """Map score to level, applying the corroboration rules. Returns (level, reason)."""
+    """Map score to level, applying the corroboration rules. Returns (level, reason).
+
+    A `None` score propagates to `belum_dapat_dinilai` rather than falling
+    through to the lowest band. The lowest band is a claim — "this date was
+    examined and nothing unusual was found" — and an unscored date supports no
+    such claim.
+    """
+    if score is None:
+        return UNSCORED, "no_detector_score"
     if score < cfg.thresholds.waspada:
         return "tenang", None
     if score < cfg.thresholds.siaga:
@@ -156,13 +180,18 @@ def fuse(inp: FusionInput, cfg: FusionConfig) -> FusionResult:
     c = corroboration_term(inp)
 
     w = cfg.weights
-    score = w.anomaly * a + w.momentum * m + w.demand * d + w.corroboration * (c or 0.0)
-    score = min(max(score, 0.0), 1.0)
+    score: float | None = None
+    if a is not None:
+        score = w.anomaly * a + w.momentum * m + w.demand * d + w.corroboration * (c or 0.0)
+        score = min(max(score, 0.0), 1.0)
 
     level, reason = assign_level(score, c, inp, cfg)
 
+    # M, D and C are still recorded when A is missing. They are what *was*
+    # observable about the date, and dropping them would leave the audit trail
+    # with nothing to show for a row it could not score.
     components: dict[str, Any] = {
-        "A": round(a, 6),
+        "A": None if a is None else round(a, 6),
         "M": round(m, 6),
         "D": round(d, 6),
         "C": None if c is None else round(c, 6),
@@ -180,10 +209,13 @@ def fuse(inp: FusionInput, cfg: FusionConfig) -> FusionResult:
         components["reason"] = reason
 
     return FusionResult(
-        score=round(score, 6),
+        score=None if score is None else round(score, 6),
         level=level,
         components=components,
         corroboration=c,
+        # `belum_dapat_dinilai` has no entry in fusion.yaml, so this is None for
+        # an unscored date. Offering advice derived from an absent observation
+        # is exactly the behaviour the level exists to stop.
         recommendation_id=cfg.recommendations.get(level),
     )
 
@@ -192,6 +224,20 @@ def explain(result: FusionResult, cfg: FusionConfig) -> str:
     """Render the arithmetic so a human can check it by hand — the M6 gate."""
     c = result.components
     w = cfg.weights
+
+    if result.score is None:
+        # Showing 0.45 x 0.000000 here would be a lie with a decimal point on
+        # it: nothing was multiplied, because nothing was measured.
+        return "\n".join(
+            [
+                "  A = (neither detector scored this date)",
+                f"  M = {c['M']:.6f}   x {w.momentum}  = {w.momentum * c['M']:.6f}",
+                f"  D = {c['D']:.6f}   x {w.demand}  = {w.demand * c['D']:.6f}",
+                f"  {'':>24}F = (undefined without A)",
+                f"  level = {result.level}",
+            ]
+        )
+
     lines = [
         f"  A = {c['A']:.6f}   x {w.anomaly}  = {w.anomaly * c['A']:.6f}",
         f"  M = {c['M']:.6f}   x {w.momentum}  = {w.momentum * c['M']:.6f}",
