@@ -10,7 +10,7 @@ else observed*, not relative to cabai's own history.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import pandas as pd
@@ -30,29 +30,38 @@ class ClusterReport:
     model: kmeans.ClusterModel | None = None
     cells: int = 0
     assignments_written: int = 0
-    dropped_months: int = 0
+    gated: int = 0
+    gate_reasons: dict[str, int] = field(default_factory=dict)
 
 
-def load_cells(conn: Conn, config: AnalysisConfig) -> pd.DataFrame:
-    """Every real daily observation, ready for monthly aggregation."""
-    clause = "and not u.is_imputed" if config.input.exclude_imputed else ""
+def load_cells(conn: Conn) -> pd.DataFrame:
+    """Every daily observation with its imputation flag, ready for aggregation.
+
+    Imputed rows are **selected, not filtered**. The clustering still computes
+    its features from real observations only, but it cannot measure how much of
+    a month was imputed if the imputed rows never arrive — and the imputed share
+    is one of the four provenance measurements stored on every cell.
+
+    `analysis.input.exclude_imputed` deliberately does not gate this query: that
+    setting is written about the two detectors, and applying it here would make
+    the provenance metrics a function of a detector policy.
+    """
     rows = fetch_all(
         conn,
-        f"""
+        """
         select c.slug as commodity, rg.slug as region,
-               u.obs_date, u.price_median as price
+               u.obs_date, u.price_median as price, u.is_imputed
           from public.price_daily_unified u
           join public.commodities c on c.id = u.commodity_id
           join public.regions rg on rg.id = u.region_id
          where u.price_median is not null
-           {clause}
          order by c.slug, rg.slug, u.obs_date
         """,
     )
     return (
         pd.DataFrame(rows)
         if rows
-        else pd.DataFrame(columns=["commodity", "region", "obs_date", "price"])
+        else pd.DataFrame(columns=["commodity", "region", "obs_date", "price", "is_imputed"])
     )
 
 
@@ -90,6 +99,10 @@ def _persist(conn: Conn, run_id: int, model: kmeans.ClusterModel) -> int:
             )
         }
 
+        def maybe(value: Any, cast: Any) -> Any:
+            """NULL for a missing number, rather than a plausible-looking zero."""
+            return None if value is None or pd.isna(value) else cast(value)
+
         payload = []
         for row in model.assignments.itertuples(index=False):
             ids = lookup.get((str(row.commodity), str(row.region)))
@@ -101,11 +114,12 @@ def _persist(conn: Conn, run_id: int, model: kmeans.ClusterModel) -> int:
                     ids[0],
                     ids[1],
                     row.period_month,
-                    float(row.volatility),
-                    float(row.cum_change),
-                    int(row.cluster_id),
-                    str(row.zone),
-                    float(row.silhouette_sample),
+                    maybe(row.volatility, float),
+                    maybe(row.cum_change, float),
+                    maybe(row.cluster_id, int),
+                    maybe(row.zone, str),
+                    maybe(row.silhouette_sample, float),
+                    maybe(row.quality_reason, str),
                 )
             )
         if payload:
@@ -114,8 +128,8 @@ def _persist(conn: Conn, run_id: int, model: kmeans.ClusterModel) -> int:
                 insert into public.cluster_assignments
                     (run_id, commodity_id, region_id, period_month,
                      feat_volatility, feat_cum_change, cluster_id, zone,
-                     silhouette_sample)
-                values (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     silhouette_sample, quality_reason)
+                values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 payload,
             )
@@ -131,28 +145,36 @@ def run_clustering(conn: Conn, config: AnalysisConfig | None = None) -> ClusterR
 
     status = "failed"
     try:
-        daily = load_cells(conn, cfg)
+        daily = load_cells(conn)
         cells = kmeans.build_cells(daily, cfg.kmeans)
         report.cells = len(cells)
 
         if cells.empty:
-            run.note("no monthly cells met min_days_in_month; nothing to cluster")
+            run.note("no monthly cells could be built; nothing to cluster")
             status = "partial"
             return report
 
         model = kmeans.fit(cells, cfg.kmeans, cfg.seed)
         report.model = model
+        report.gated = model.n_gated
+        report.gate_reasons = model.gate_reasons
         report.assignments_written = _persist(conn, run.id, model)
         conn.commit()
 
         run.note(
-            f"k search {cfg.kmeans.k_min}..{cfg.kmeans.k_max} over {len(cells)} cells; "
-            f"selected k={model.k_selected} on silhouette {model.silhouette_avg:.4f}"
+            f"k search {cfg.kmeans.k_min}..{cfg.kmeans.k_max} over {model.n_samples} fitted "
+            f"cells; selected k={model.k_selected} on silhouette {model.silhouette_avg:.4f}"
+        )
+        run.note(
+            f"provenance gate: {model.n_gated} of {len(cells)} cells excluded from the fit "
+            f"and kept with zone=NULL ("
+            + ", ".join(f"{k}={v}" for k, v in sorted(model.gate_reasons.items()))
+            + f"); thresholds {cfg.kmeans.quality.model_dump()}"
         )
         if model.k_selected > 3:
             run.note(
                 f"k={model.k_selected} > 3, so the middle clusters merge into kuning "
-                f"(see docs/methods.md); k was not forced to 3"
+                f"(see docs/methods.md); k was not pinned at 3"
             )
         status = "success"
     finally:
@@ -171,7 +193,7 @@ def zone_table(conn: Conn, run_id: int, period_month: Any = None) -> list[dict[s
         """
         select c.slug as commodity, rg.slug as region, a.period_month,
                a.zone, a.cluster_id, a.feat_volatility, a.feat_cum_change,
-               a.silhouette_sample
+               a.silhouette_sample, a.quality_reason
           from public.cluster_assignments a
           join public.commodities c on c.id = a.commodity_id
           join public.regions rg on rg.id = a.region_id
@@ -179,7 +201,9 @@ def zone_table(conn: Conn, run_id: int, period_month: Any = None) -> list[dict[s
            and a.period_month = coalesce(
                  %s,
                  (select max(period_month) from public.cluster_assignments where run_id = %s))
-         order by a.zone desc, a.feat_volatility desc
+         -- `nulls last` on both: under DESC Postgres sorts NULLs first, which
+         -- would open the gate's sanity check with the rows it excluded.
+         order by a.zone desc nulls last, a.feat_volatility desc nulls last
         """,
         (run_id, period_month, run_id),
     )
@@ -194,8 +218,10 @@ def zone_counts_by_commodity(conn: Conn, run_id: int) -> list[dict[str, Any]]:
                count(*) filter (where a.zone = 'merah')  as merah,
                count(*) filter (where a.zone = 'kuning') as kuning,
                count(*) filter (where a.zone = 'hijau')  as hijau,
+               count(*) filter (where a.zone is null)    as gated,
                count(*) as total,
-               round(avg(a.feat_volatility)::numeric, 5) as avg_volatility
+               round(avg(a.feat_volatility) filter (where a.zone is not null)::numeric, 5)
+                   as avg_volatility
           from public.cluster_assignments a
           join public.commodities c on c.id = a.commodity_id
          where a.run_id = %s

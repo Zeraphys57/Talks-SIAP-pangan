@@ -116,6 +116,15 @@ export const ZONE_COPY: Record<string, { label: string; meaning: string }> = {
     label: "Cenderung stabil",
     meaning: "Harganya jarang berubah tajam dari bulan ke bulan.",
   },
+  // Not a fourth kelompok. The month was measured and found unfit to group —
+  // too sedikit hari, atau angkanya tidak berubah karena sumbernya berhenti
+  // memperbarui, bukan karena harganya diam.
+  belum_dapat_dinilai: {
+    label: "Belum dapat dikelompokkan",
+    meaning:
+      "Data bulan ini belum cukup untuk mengelompokkan pergerakan harganya. " +
+      "Bukan berarti harganya stabil — berarti belum bisa dinilai.",
+  },
 };
 
 export const COPY = {

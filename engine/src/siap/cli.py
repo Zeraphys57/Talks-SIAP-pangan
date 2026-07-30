@@ -799,6 +799,20 @@ def cluster_cmd() -> None:
     )
 
     click.echo("=" * 96)
+    click.echo("PROVENANCE GATE — excluded from the fit, kept in the table")
+    click.echo("=" * 96)
+    coverage = (model.n_samples / report.cells * 100) if report.cells else 0.0
+    click.echo(
+        f"  fitted {model.n_samples:,} of {report.cells:,} cells ({coverage:.1f}% coverage); "
+        f"{model.n_gated:,} gated"
+    )
+    for reason, count in sorted(model.gate_reasons.items(), key=lambda kv: -kv[1]):
+        click.echo(f"    {reason:<32}{count:>7,}")
+    if not model.gate_reasons:
+        click.echo("    (no cell was gated)")
+
+    click.echo()
+    click.echo("=" * 96)
     click.echo("K SEARCH — silhouette selects k, the elbow is recorded for the paper")
     click.echo("=" * 96)
     click.echo(f"  {'k':>3}{'inertia':>14}{'silhouette':>13}")
@@ -833,16 +847,22 @@ def cluster_cmd() -> None:
     click.echo("ZONE FREQUENCY PER COMMODITY — cabai/bawang should dominate merah")
     click.echo("=" * 96)
     click.echo(
-        f"  {'commodity':<24}{'merah':>7}{'kuning':>8}{'hijau':>7}{'total':>7}"
+        f"  {'commodity':<24}{'merah':>7}{'kuning':>8}{'hijau':>7}{'gated':>7}{'total':>7}"
         f"{'avg volatility':>16}"
     )
     for r in counts:
         total = int(r["total"]) or 1
-        merah_pct = int(r["merah"]) / total * 100
+        # Percentage of the cells that were actually zoned. Counting gated cells
+        # in the denominator would let a commodity look calm because most of its
+        # months could not be judged.
+        zoned = total - int(r["gated"]) or 1
+        merah_pct = int(r["merah"]) / zoned * 100
         merah_colour = "red" if merah_pct >= 25 else ("yellow" if merah_pct >= 10 else "")
+        volatility = r["avg_volatility"]
         line = (
             f"  {r['commodity']!s:<24}{int(r['merah']):>7}{int(r['kuning']):>8}"
-            f"{int(r['hijau']):>7}{total:>7}{float(r['avg_volatility']):>16.5f}"
+            f"{int(r['hijau']):>7}{int(r['gated']):>7}{total:>7}"
+            f"{('n/a' if volatility is None else f'{float(volatility):.5f}'):>16}"
         )
         click.echo(click.style(line, fg=merah_colour) if merah_colour else line)
 
@@ -856,10 +876,13 @@ def cluster_cmd() -> None:
         zone = str(r["zone"]) if r["zone"] else "-gated-"
         colour = ZONE_COLOUR.get(zone)
         badge = click.style(zone.upper().ljust(7), fg=colour)
+        vol = r["feat_volatility"]
+        change = r["feat_cum_change"]
         click.echo(
             f"  {badge}{r['region']!s:<17}{r['commodity']!s:<24}"
-            f"vol {float(r['feat_volatility']):.5f}  "
-            f"change {float(r['feat_cum_change']) * 100:+7.2f}%"
+            f"vol {('    n/a' if vol is None else f'{float(vol):7.5f}')}  "
+            f"change {('    n/a' if change is None else f'{float(change) * 100:+7.2f}%')}"
+            f"  {r['quality_reason'] or ''}"
         )
 
 

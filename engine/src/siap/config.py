@@ -445,6 +445,30 @@ class IForestParams(_Strict):
     demand_missing_fill: float
 
 
+class CellQualityParams(_Strict):
+    """Provenance gate for a monthly cell.
+
+    Deliberately not a volatility threshold. Gating on low measured volatility
+    would conflate a genuinely stable price with a feed that stopped updating,
+    and suppressing real stable commodities is not defensible in the paper. Every
+    criterion here is a statement about the *data*, not about the feature value.
+    """
+
+    min_real_obs: int = Field(gt=1)
+    # A cell can clear min_real_obs on 25 observations that are all the same
+    # number. That is a publication cadence, not a month of trading.
+    min_distinct_real: int = Field(gt=1)
+    # Length at which a run of identical consecutive real values counts as the
+    # source carrying a value forward rather than resurveying.
+    stale_run_days: int = Field(gt=1)
+    max_stale_fraction: float = Field(gt=0, le=1)
+    # Measured and stored on every cell, but null = not gating. The imputed
+    # share is recorded so the threshold can be set from the observed
+    # distribution rather than guessed; at the current thresholds min_real_obs
+    # already catches the cells where imputation dominates.
+    max_imputed_fraction: float | None = Field(default=None, gt=0, le=1)
+
+
 class KMeansParams(_Strict):
     k_min: int = Field(ge=2)
     k_max: int = Field(ge=2)
@@ -454,8 +478,8 @@ class KMeansParams(_Strict):
     k_select_min: int = Field(ge=2)
     n_init: int = Field(gt=0)
     max_iter: int = Field(gt=0)
-    min_days_in_month: int = Field(gt=1)
     min_cells: int = Field(gt=0)
+    quality: CellQualityParams
     zone_weight_volatility: float
     zone_weight_cum_change: float
 

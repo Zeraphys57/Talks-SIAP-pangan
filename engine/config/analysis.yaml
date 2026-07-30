@@ -150,13 +150,51 @@ kmeans:
   n_init: 10
   max_iter: 300
 
-  # A month needs enough real observations for a volatility estimate to mean
-  # anything. Below this the cell is dropped rather than contributing a
-  # standard deviation computed from a handful of days.
-  min_days_in_month: 15
-
   # Below this many cells the clustering itself is not worth trusting.
   min_cells: 30
+
+  # -------------------------------------------------------------------------
+  # Provenance gate on each monthly cell.
+  #
+  # Replaces the old `min_days_in_month`, which silently *dropped* thin months.
+  # Dropping destroys the audit trail: a cell that never reaches the table
+  # cannot be counted, so coverage becomes unreportable and the paper cannot say
+  # how much of the grid the clustering actually covers. A gated cell now keeps
+  # its row and its features, takes `zone = NULL` and a `quality_reason`, and is
+  # excluded from the fit.
+  #
+  # Every criterion is a statement about the DATA, never about the feature
+  # value. A volatility threshold would have been easier and is indefensible:
+  # it cannot tell a genuinely stable price from a feed that stopped updating,
+  # and it would suppress real stable commodities to hide a data problem.
+  # -------------------------------------------------------------------------
+  quality:
+    # Same number the old min_days_in_month used. The change is what happens to
+    # a cell below it, not where the line sits.
+    min_real_obs: 15
+
+    # A cell can clear min_real_obs on 25 observations that are all the same
+    # rupiah. Distinct values is what separates "the price held steady" from
+    # "nobody resurveyed". M2 found PIHPS pinned to an identical value for days
+    # at a time; in 2023 it was the only source for jawa_tengah and
+    # di_yogyakarta.
+    min_distinct_real: 3
+
+    # A run of this many identical consecutive real observations is treated as
+    # carry-forward rather than a market that did not move. Seven days matches
+    # the stale-baseline guard the z-score detector already applies.
+    stale_run_days: 7
+
+    # Gate when at least half the month's real observations sit inside such a
+    # run. Runs are found on the full series, not per month, so a value carried
+    # across a month boundary still counts.
+    max_stale_fraction: 0.5
+
+    # Measured and stored on every cell; null means it is not gating. Recorded
+    # so the threshold can be chosen from the observed distribution rather than
+    # guessed — at the thresholds above, min_real_obs already catches the cells
+    # where imputation dominates.
+    max_imputed_fraction: null
 
   # Post-hoc zone mapping. Clusters are ranked by
   #     0.5 * z(centroid_volatility) + 0.5 * z(centroid_cum_change)

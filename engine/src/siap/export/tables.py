@@ -264,8 +264,10 @@ def zone_counts_table(conn: Conn, cluster_run_id: int) -> Table:
                    count(*) filter (where a.zone = 'merah')  as merah,
                    count(*) filter (where a.zone = 'kuning') as kuning,
                    count(*) filter (where a.zone = 'hijau')  as hijau,
+                   count(*) filter (where a.zone is null)    as gated,
                    count(*) as months,
-                   round(avg(a.feat_volatility)::numeric, 5) as mean_volatility
+                   round(avg(a.feat_volatility) filter (where a.zone is not null)::numeric, 5)
+                       as mean_volatility
               from public.cluster_assignments a
               join public.commodities c on c.id = a.commodity_id
              where a.run_id = %s
@@ -274,7 +276,12 @@ def zone_counts_table(conn: Conn, cluster_run_id: int) -> Table:
             """,
             (cluster_run_id,),
         ),
-        note="Zones describe how a price has behaved, not where it will go next.",
+        note=(
+            "Zones describe how a price has behaved, not where it will go next. "
+            "`gated` counts months excluded from the fit on data provenance; they are "
+            "kept in the table so this column is reportable, and are omitted from "
+            "mean_volatility because their volatility measures a publication cadence."
+        ),
     )
 
 

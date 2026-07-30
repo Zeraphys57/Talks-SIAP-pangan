@@ -25,6 +25,7 @@ def _daily(
             "region": region,
             "obs_date": [start + timedelta(days=i) for i in range(n)],
             "price": prices,
+            "is_imputed": False,
         }
     )
 
@@ -45,15 +46,22 @@ def test_cells_are_commodity_region_month_not_commodity() -> None:
     assert cells["period_month"].nunique() >= 5
 
 
-def test_months_with_too_few_days_are_dropped() -> None:
-    """A standard deviation from a handful of days describes the sample."""
+def test_months_with_too_few_days_are_gated_not_dropped() -> None:
+    """A standard deviation from a handful of days describes the sample.
+
+    The cell is kept anyway. Dropping it destroys the audit trail: a row that
+    never reaches the table cannot be counted, so coverage stops being
+    reportable and the paper cannot say how much of the grid was clustered.
+    """
     params = _params()
     frame = _daily("cabai", "jatim", months=2)
     # Keep only 5 days of the second month.
     keep = frame["obs_date"] < date(2024, 2, 6)
     cells = kmeans.build_cells(frame[keep], params)
     short = [c for c in cells.itertuples() if c.period_month == date(2024, 2, 1)]
-    assert not short, "a month with 5 observations produced a volatility estimate"
+    assert len(short) == 1, "the thin month vanished instead of being gated"
+    assert short[0].quality_reason == "insufficient_real_obs"
+    assert short[0].real_obs == 5
 
 
 def test_period_month_is_normalised_to_the_first(with_db: bool = False) -> None:
@@ -68,6 +76,105 @@ def test_volatility_uses_log_returns_so_price_level_does_not_matter() -> None:
     cheap = kmeans.build_cells(_daily("a", "r", level=13_000.0), params)
     dear = kmeans.build_cells(_daily("b", "r", level=130_000.0), params)
     assert cheap["volatility"].mean() == pytest.approx(dear["volatility"].mean(), rel=0.25)
+
+
+# ---------------------------------------------------------------------------
+# The provenance gate
+# ---------------------------------------------------------------------------
+def test_a_stuck_feed_is_gated_even_though_its_volatility_is_real() -> None:
+    """The case the gate exists for, and the case a volatility threshold cannot see.
+
+    M2 found PIHPS pinned to an identical rupiah for days at a time. Such a month
+    has a genuine, low, entirely meaningless standard deviation. Gating on the
+    feature value would catch this cell — and would catch a genuinely stable
+    commodity in exactly the same way, which is why the rule is on provenance.
+    """
+    params = _params()
+    frame = _daily("beras", "diy", months=1)
+    frame["price"] = 13_000.0  # one value, all month: nobody resurveyed
+    cells = kmeans.build_cells(frame, params)
+    assert cells["quality_reason"].tolist() == ["insufficient_distinct_values"]
+    assert cells["distinct_real"].iloc[0] == 1
+    assert cells["volatility"].iloc[0] == pytest.approx(0.0), (
+        "the volatility is real and low; that is precisely why it is not the test"
+    )
+
+
+def test_a_genuinely_stable_price_that_still_moves_is_not_gated() -> None:
+    """The other half of the same argument: low volatility alone must pass."""
+    params = _params()
+    frame = _daily("beras", "jatim", months=1, level=13_000.0)
+    frame["price"] = [13_000 + (i % 5) * 10 for i in range(len(frame))]
+    cells = kmeans.build_cells(frame, params)
+    assert cells["quality_reason"].isna().all()
+    assert cells["volatility"].iloc[0] < 0.005, "this really is a calm series"
+
+
+def test_carry_forward_runs_are_measured_across_the_month_boundary() -> None:
+    """A value held from late March into early April is stale on both sides.
+
+    Computing runs per month would reset the counter at the boundary and let the
+    longest carry-forwards through.
+    """
+    params = _params()
+    frame = _daily("bawang-merah", "jateng", months=2)
+    frame = frame.reset_index(drop=True)
+    # A 20-day flat run straddling the boundary: 10 days either side.
+    frame.loc[20:39, "price"] = 30_000.0
+    cells = kmeans.build_cells(frame, params).set_index("period_month")
+    assert cells.loc[date(2024, 1, 1), "stale_fraction"] > 0
+    assert cells.loc[date(2024, 2, 1), "stale_fraction"] > 0
+
+
+def test_imputed_rows_are_measured_but_never_shape_the_features() -> None:
+    """An interpolated value sits on the line between its neighbours.
+
+    Including it would shrink the very standard deviation being measured, so it
+    is counted for provenance and excluded from the feature.
+    """
+    params = _params()
+    real = _daily("cabai", "jatim", months=1)
+    fake = real.copy()
+    fake["obs_date"] = fake["obs_date"] + timedelta(days=200)
+    fake["is_imputed"] = True
+    fake["price"] = 1.0  # absurd, so any leak into the feature is unmissable
+
+    from_real = kmeans.build_cells(real, params)
+    mixed = kmeans.build_cells(pd.concat([real, fake]), params)
+    january = mixed[mixed["period_month"] == date(2024, 1, 1)]
+
+    assert january["volatility"].iloc[0] == pytest.approx(from_real["volatility"].iloc[0])
+    imputed_month = mixed[mixed["period_month"] == date(2024, 7, 1)]
+    assert imputed_month["imputed_fraction"].iloc[0] == pytest.approx(1.0)
+    assert imputed_month["real_obs"].iloc[0] == 0
+
+
+def test_gated_cells_keep_their_row_but_leave_the_fit() -> None:
+    cfg = load_analysis()
+    cells = _mixed_cells()
+    cells.loc[cells.index[:20], "quality_reason"] = "stale_dominated"
+
+    model = kmeans.fit(cells, cfg.kmeans, cfg.seed)
+
+    assert len(model.assignments) == len(cells), "a gated cell was dropped from the output"
+    assert model.n_samples == len(cells) - 20
+    assert model.n_gated == 20
+    assert model.gate_reasons == {"stale_dominated": 20}
+
+    gated = model.assignments[model.assignments["quality_reason"].notna()]
+    assert gated["zone"].isna().all(), "a gated cell was given a zone"
+    assert gated["cluster_id"].isna().all()
+    fitted = model.assignments[model.assignments["quality_reason"].isna()]
+    assert fitted["zone"].notna().all()
+
+
+def test_gate_reports_the_most_fundamental_failure_first() -> None:
+    """A three-observation month is thin, not stale, even when it is both."""
+    quality = _params().quality
+    assert kmeans.gate_reason(3, 1, 1.0, 0.9, quality) == "insufficient_real_obs"
+    assert kmeans.gate_reason(30, 1, 0.0, 0.0, quality) == "insufficient_distinct_values"
+    assert kmeans.gate_reason(30, 9, 0.7, 0.0, quality) == "stale_dominated"
+    assert kmeans.gate_reason(30, 9, 0.1, 0.9, quality) is None
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +249,11 @@ def _mixed_cells(n: int = 120) -> pd.DataFrame:
             "cum_change": rng.normal(0.55, 0.08, n // 3),
         }
     )
-    return pd.concat([calm, wild], ignore_index=True)
+    cells = pd.concat([calm, wild], ignore_index=True)
+    # These frames stand in for the output of build_cells, which always carries
+    # a gate verdict. None means the cell cleared it.
+    cells["quality_reason"] = None
+    return cells
 
 
 def test_fit_records_the_whole_k_search_not_just_the_winner() -> None:

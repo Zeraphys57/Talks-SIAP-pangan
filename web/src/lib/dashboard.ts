@@ -425,15 +425,27 @@ async function fetchSeries(
   }));
 }
 
+/**
+ * The most recent month's regime zone, or `belum_dapat_dinilai` when that month
+ * was excluded from the fit on data provenance.
+ *
+ * The distinction matters on the page: a null return renders nothing at all,
+ * which reads as "this commodity has no regime" — but the truth is that the
+ * month was measured and found unfit to cluster. Returning the fourth state
+ * keeps the section visible and says which of the two happened.
+ */
 async function fetchZone(commodityId: number, regionId: number): Promise<string | null> {
   const { data } = await db
     .from("cluster_assignments")
-    .select("zone, period_month")
+    .select("zone, quality_reason, period_month")
     .eq("commodity_id", commodityId)
     .eq("region_id", regionId)
     .order("period_month", { ascending: false })
     .limit(1);
-  return data?.length ? (data[0].zone as string) : null;
+  if (!data?.length) return null;
+  const row = data[0] as { zone: string | null; quality_reason: string | null };
+  if (row.zone) return row.zone;
+  return row.quality_reason ? "belum_dapat_dinilai" : null;
 }
 
 /** Top-decile seasonal weeks — "periode rawan naik".
