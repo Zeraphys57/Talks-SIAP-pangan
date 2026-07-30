@@ -51,7 +51,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from .db import Conn, fetch_all
+from .db import Conn, fetch_all, refresh_statistics
 from .paths import docs_dir
 from .runs import Run
 
@@ -490,6 +490,15 @@ def rebuild(conn: Conn, run: Run) -> PreprocessReport:
         report.rows_null += sum(1 for p in series if p.price_median is None)
 
     conn.commit()
+
+    # Both tables, not just the one this step wrote. price_daily_unified was
+    # truncated and rewritten a moment ago, and price_observations was appended
+    # to by the ingest that ran immediately before — so at this point in the
+    # pipeline both describe themselves to the planner as they were yesterday.
+    # `siap fuse` joins both and was being cancelled by statement_timeout for
+    # exactly that reason.
+    refresh_statistics(conn, "price_daily_unified", "price_observations")
+
     run.note(
         f"rebuilt {report.series_built} series: {report.rows_real} observed, "
         f"{report.rows_imputed} imputed, {report.rows_null} left NULL"

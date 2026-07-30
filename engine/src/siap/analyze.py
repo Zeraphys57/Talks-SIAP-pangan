@@ -19,7 +19,7 @@ from typing import Any
 import pandas as pd
 
 from .config import AnalysisConfig, load_analysis
-from .db import Conn, fetch_all
+from .db import Conn, fetch_all, refresh_statistics
 from .modules import iforest, zscore
 from .runs import Run, start_run
 
@@ -197,6 +197,11 @@ def run_detectors(conn: Conn, config: AnalysisConfig | None = None) -> AnalyzeRe
             report.series.append(result)
 
         conn.commit()
+
+        # anomaly_scores just grew by tens of thousands of rows and is the driving
+        # table of the fusion query that runs next. See db.refresh_statistics.
+        refresh_statistics(conn, "anomaly_scores")
+
         if not any((s.iforest_flagged or s.iforest_null < s.n_rows) for s in report.series):
             run.note("no series produced Isolation Forest scores")
         run.note(

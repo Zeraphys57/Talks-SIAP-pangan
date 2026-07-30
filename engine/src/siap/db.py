@@ -7,8 +7,9 @@ about:
 1. Migrations are DDL. PostgREST cannot run DDL at all.
 2. Ingestion writes tens of thousands of rows per backfill. `COPY` and multi-row
    `execute_many` are orders of magnitude faster than HTTP round trips.
-3. The engine runs under the service role, which bypasses RLS anyway, so the
-   API layer would add latency without adding a safety property.
+3. The engine connects as the database owner, which is not subject to RLS at all,
+   so the API layer would add latency without adding a safety property. There is
+   deliberately no `service_role` key in this project; nothing here reads one.
 
 The Next.js app is the opposite case and uses the REST API with the anon key,
 constrained by the policies in supabase/migrations/0006_rls.sql.
@@ -125,6 +126,38 @@ def table_counts(conn: Conn, tables: Sequence[str]) -> dict[str, int]:
             raise DatabaseError(f"table public.{table} does not exist")
         counts[table] = int(fetch_value(conn, f'select count(*) from public."{table}"') or 0)
     return counts
+
+
+def refresh_statistics(conn: Conn, *tables: str) -> None:
+    """Update planner statistics for tables that were just bulk-written.
+
+    A bulk insert, or a truncate-and-rewrite, leaves `pg_statistic` describing the
+    table as it was beforehand, and the planner chooses its join strategy from
+    those numbers. Autovacuum catches up on its own schedule — which, inside a
+    pipeline, is after the next command has already planned against stale
+    estimates. `siap fuse` hit exactly that: its query completes in seconds once
+    statistics have settled, and was cancelled by `statement_timeout` when run
+    immediately after `preprocess` rewrote price_daily_unified while
+    price_observations still carried a day-old sample.
+
+    ANALYZE is permitted inside a transaction block, unlike VACUUM, and on tables
+    of this size costs a fraction of a second. Table names are validated against
+    the catalog because they cannot be bound as parameters.
+    """
+    known = {
+        r["table_name"]
+        for r in fetch_all(
+            conn,
+            "select table_name from information_schema.tables where table_schema = 'public'",
+        )
+    }
+    with conn.cursor() as cur:
+        for table in tables:
+            if table not in known:
+                raise DatabaseError(f"table public.{table} does not exist")
+            cur.execute(f'analyze public."{table}"')
+    conn.commit()
+    log.debug("refreshed planner statistics for %s", ", ".join(tables))
 
 
 def server_version(conn: Conn) -> str:

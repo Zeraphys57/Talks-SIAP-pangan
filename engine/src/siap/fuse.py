@@ -61,6 +61,14 @@ def load_inputs(conn: Conn, anomaly_run_id: int, cfg: FusionConfig) -> list[dict
              where a.run_id = %(run)s
              group by a.commodity_id, a.region_id, a.obs_date
         ),
+        -- The dates this run actually covers. `scores` is filtered by run_id;
+        -- momentum and per_source were not, so their cost grew with the whole
+        -- archive while every row outside this window was discarded by the joins
+        -- below. Bounding them is output-identical by construction: the final
+        -- select joins on `s.obs_date`, which cannot fall outside [lo, hi].
+        bounds as (
+            select min(obs_date) as lo, max(obs_date) as hi from scores
+        ),
         momentum as (
             select u.commodity_id, u.region_id, u.obs_date,
                    u.price_median,
@@ -70,6 +78,8 @@ def load_inputs(conn: Conn, anomaly_run_id: int, cfg: FusionConfig) -> list[dict
                      on p.commodity_id = u.commodity_id
                     and p.region_id   = u.region_id
                     and p.obs_date    = u.obs_date - 7
+             where u.obs_date between (select lo from bounds)
+                                  and (select hi from bounds)
         ),
         per_source as (
             select o.commodity_id, o.region_id, o.obs_date,
@@ -84,8 +94,13 @@ def load_inputs(conn: Conn, anomaly_run_id: int, cfg: FusionConfig) -> list[dict
                     and b.region_id    = o.region_id
                     and b.source_id    = o.source_id
                     and b.obs_date     = o.obs_date - %(window)s
+             where o.obs_date between (select lo from bounds)
+                                  and (select hi from bounds)
              group by o.commodity_id, o.region_id, o.obs_date
         ),
+        -- Deliberately NOT bounded: lifetime_sources means what it says, and a
+        -- window would silently redefine "has this pair ever had one source".
+        -- It is a grouped scan rather than a self-join, so it is cheap.
         coverage as (
             select commodity_id, region_id,
                    count(distinct source_id) as lifetime_sources
@@ -95,6 +110,7 @@ def load_inputs(conn: Conn, anomaly_run_id: int, cfg: FusionConfig) -> list[dict
         demand as (
             select d.commodity_id, d.week_start, d.region_scope, d.interest_z52
               from public.demand_signals d
+             where d.week_start <= (select hi from bounds)
         )
         select c.slug as commodity, rg.slug as region, s.obs_date,
                s.commodity_id, s.region_id,

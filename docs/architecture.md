@@ -35,9 +35,19 @@ reproduce from a citable library version.
 
 Splitting the system this way also buys a property that matters more than
 convenience: **the write path and the read path have different privileges.** The
-engine holds the service role and is the only thing that can write. The web app
-holds the anon key and can only read what RLS permits. If the dashboard is
-compromised, the worst outcome is that already-public data is read again.
+engine connects straight to Postgres through `DATABASE_URL`, as the database
+owner, and is the only thing that can write. The web app holds the anon key and
+can only read what RLS permits. If the dashboard is compromised, the worst
+outcome is that already-public data is read again.
+
+Note that the engine does **not** use a Supabase `service_role` key — there is no
+such credential in this project. Nothing under `engine/src` reads one
+(`grep -rn SERVICE_ROLE engine/src` returns nothing); `settings.py` exposes
+`database_url()`, `supabase_url()`, `supabase_anon_key()` and `contact_email()`,
+and no accessor for a service role. It was provisioned in two places and read by
+none, so it was removed rather than rotated — see [deployment](deployment.md).
+The privilege boundary is real; it just rests on the Postgres connection string,
+which is also the one credential here that can `DROP TABLE`.
 
 Next.js keeps two jobs: rendering the public dashboard, and hosting the `/lab`
 labeling UI, where being a normal authenticated web form is exactly right.
@@ -86,8 +96,9 @@ if it does.
 1. Migrations are DDL, and PostgREST cannot run DDL.
 2. A three-year backfill writes tens of thousands of rows. Batched SQL is orders
    of magnitude cheaper than HTTP round trips.
-3. The engine runs as the service role, which bypasses RLS regardless, so
-   routing through the API would add latency without adding a safety property.
+3. The engine connects as the database owner (`select current_user` → `postgres`),
+   which is not subject to RLS at all, so routing through the API would add
+   latency without adding a safety property.
 
 ## Schema as source of truth
 
