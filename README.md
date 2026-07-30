@@ -26,7 +26,7 @@ commodity, and presents the result as a mobile-first dashboard for UMKM owners.
 | `supabase/migrations/` | Numbered SQL migrations — the single source of schema truth |
 | `web/` | Next.js dashboard (read-only) and `/lab` research console |
 | `scripts/` | Repo-wide checks that belong to neither side, run by CI |
-| `docs/` | [architecture](docs/architecture.md), [methods](docs/methods.md), [design](docs/design.md), [reproducibility](docs/reproducibility.md), [deployment](docs/deployment.md), [sources](docs/sources.md), [labelling](docs/labelling.md), [changelog](docs/changelog.md) |
+| `docs/` | **[panduan](docs/panduan.md) — operator's guide, in Indonesian: what every step does, and how the annotators get in.** Then [architecture](docs/architecture.md), [methods](docs/methods.md), [design](docs/design.md), [reproducibility](docs/reproducibility.md), [deployment](docs/deployment.md), [sources](docs/sources.md), [labelling](docs/labelling.md), [changelog](docs/changelog.md) |
 | `paper-exports/` | Generated figures and tables (gitignored) |
 
 ## Setup
