@@ -62,7 +62,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # `defaults.run.working-directory` applies to `run:` steps only, never to
+      # actions, so this reads the repo root unless told otherwise — and the root
+      # has no package.json. Without it: "No pnpm version is specified", 5s in,
+      # before Node is even installed. web/package.json holds packageManager, so
+      # the version stays declared in exactly one place.
       - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
 
       - uses: actions/setup-node@v4
         with:
@@ -95,14 +102,19 @@ jobs:
       # SUPABASE_SERVICE_ROLE_KEY bypasses every RLS policy. If it ever reaches
       # the browser bundle, every raw snapshot, per-source price and unblinded
       # ground-truth candidate becomes public. Cheap check, catastrophic miss.
-      - name: Assert the service role key is never referenced under web/
-        run: |
-          if grep -rn --exclude-dir=node_modules --exclude-dir=.next \
-               -e 'SERVICE_ROLE' -e 'service_role' web/; then
-            echo "::error::A service-role reference was found under web/. It must never leave the engine."
-            exit 1
-          fi
-          echo "OK: no service-role reference under web/"
+      #
+      # The check inspects key VALUES, not the variable name. The name appears
+      # under web/ in the comment that warns about it and in the runtime guard
+      # that rejects it — grepping the string failed on its own defence, red on
+      # every commit, which is how a check stops being read.
+      - name: Assert no service-role credential is reachable from web/
+        run: python3 scripts/assert_no_service_role.py
+
+      # A guard nobody has watched fail is not known to work. This plants three
+      # kinds of leak, asserts the scan catches all of them and leaves a real
+      # anon key alone, then cleans up.
+      - name: Assert the guard itself still catches a leak
+        run: python3 scripts/assert_no_service_role.py --self-test
 
       - name: Assert no .env file is committed
         run: |

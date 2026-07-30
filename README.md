@@ -25,6 +25,7 @@ commodity, and presents the result as a mobile-first dashboard for UMKM owners.
 | `engine/config/` | All tunable parameters and reference data (YAML) |
 | `supabase/migrations/` | Numbered SQL migrations — the single source of schema truth |
 | `web/` | Next.js dashboard (read-only) and `/lab` research console |
+| `scripts/` | Repo-wide checks that belong to neither side, run by CI |
 | `docs/` | [architecture](docs/architecture.md), [methods](docs/methods.md), [design](docs/design.md), [reproducibility](docs/reproducibility.md), [deployment](docs/deployment.md), [sources](docs/sources.md), [labelling](docs/labelling.md), [changelog](docs/changelog.md) |
 | `paper-exports/` | Generated figures and tables (gitignored) |
 
@@ -82,7 +83,14 @@ Run the checks the way CI does:
 ```bash
 cd engine && ruff check . && ruff format --check . && mypy && pytest
 cd ../web && pnpm typecheck && pnpm lint && pnpm build
+cd ..    && python scripts/assert_no_service_role.py \
+         && python scripts/assert_no_service_role.py --self-test
 ```
+
+The last one asserts no service-role credential is reachable from `web/`, then
+asserts the check itself still catches a planted leak. It inspects key *values*,
+not the variable name — the name appears legitimately in the comment warning
+about it and in the runtime guard that rejects it.
 
 ### Windows + fnm
 
