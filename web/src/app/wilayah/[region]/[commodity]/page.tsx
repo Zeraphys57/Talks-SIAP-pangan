@@ -81,8 +81,12 @@ export default async function CommodityPage({
   const zone = detail.zone ? ZONE_COPY[detail.zone] : null;
   const hasImputed = detail.series.some((p) => p.imputed);
 
+  // Widened only to `2xl`: this page is one narrative column (price, chart,
+  // seasonality, regime, sources) and prose stops being readable long before
+  // 1000px. The chart is a viewBox SVG at w-full, so it takes the extra width as
+  // detail rather than as stretch.
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 px-5 py-8">
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 px-5 py-8 sm:max-w-2xl">
       <header>
         <Link
           href={`/wilayah/${region}`}

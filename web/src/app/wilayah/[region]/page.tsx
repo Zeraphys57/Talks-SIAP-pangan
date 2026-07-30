@@ -18,6 +18,18 @@ import { formatLongDate } from "@/lib/format";
 
 export const revalidate = 1800;
 
+/**
+ * One column on a phone, which is the case design.md optimises for and the only
+ * one that must be perfect. Wider viewports get columns rather than a wider card:
+ * the card's internal layout — name left, price right, metadata beneath — was
+ * sized for a thumb's reading distance, and stretching it to 1000px would leave a
+ * price marooned from the name it belongs to.
+ *
+ * Three columns at `lg` puts all twelve commodities of a region on one screen,
+ * which is the actual desktop advantage: less scrolling, not bigger type.
+ */
+const CARD_GRID = "grid gap-3 sm:grid-cols-2 lg:grid-cols-3";
+
 export async function generateMetadata({
   params,
 }: {
@@ -50,7 +62,7 @@ export default async function RegionPage({
   const calm = board.alerts.filter((a) => a.level === "hijau");
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 px-5 py-8">
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-6 px-5 py-8 sm:max-w-2xl lg:max-w-5xl">
       <header>
         <Link href="/" className="text-sm text-neutral-600 dark:text-neutral-400 underline underline-offset-2">
           &larr; {COPY.back}
@@ -81,9 +93,11 @@ export default async function RegionPage({
       {attention.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="text-sm font-medium">{COPY.needsAttention}</h2>
-          {attention.map((alert) => (
-            <AlertCard key={alert.commodity_slug} alert={alert} regionSlug={region} />
-          ))}
+          <div className={CARD_GRID}>
+            {attention.map((alert) => (
+              <AlertCard key={alert.commodity_slug} alert={alert} regionSlug={region} />
+            ))}
+          </div>
         </section>
       )}
 
@@ -96,9 +110,11 @@ export default async function RegionPage({
       {calm.length > 0 && (
         <section className="flex flex-col gap-3">
           <h2 className="text-sm font-medium text-neutral-600 dark:text-neutral-400">{COPY.normalPrices}</h2>
-          {calm.map((alert) => (
-            <AlertCard key={alert.commodity_slug} alert={alert} regionSlug={region} compact />
-          ))}
+          <div className={CARD_GRID}>
+            {calm.map((alert) => (
+              <AlertCard key={alert.commodity_slug} alert={alert} regionSlug={region} compact />
+            ))}
+          </div>
         </section>
       )}
 

@@ -17,7 +17,7 @@ export default async function Home() {
   const regions = await fetchRegions();
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-8 px-5 py-10">
+    <main className="mx-auto flex min-h-dvh max-w-md flex-col gap-8 px-5 py-10 sm:max-w-xl">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">{COPY.appName}</h1>
         <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{COPY.tagline}</p>
@@ -27,7 +27,9 @@ export default async function Home() {
         <h2 className="text-sm font-medium">{COPY.chooseRegion}</h2>
         <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{COPY.regionHint}</p>
 
-        <ul className="mt-4 flex flex-col gap-2">
+        {/* Two columns from `sm` up: four regions fit side by side without any
+            of them growing to an absurd width. Stays one column on a phone. */}
+        <ul className="mt-4 grid gap-2 sm:grid-cols-2">
           {regions.map((region) => (
             <li key={region.slug}>
               <Link
