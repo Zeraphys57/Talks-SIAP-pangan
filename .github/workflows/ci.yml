@@ -92,6 +92,12 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # node --test with --experimental-strip-types: no test framework, no new
+      # dependency. Covers the chart's segment builder, whose orphan-point case
+      # cannot be reproduced from production data and so needs a fixture.
+      - name: Test
+        run: pnpm test
+
       # The build prerenders 48 commodity pages, so it reads Supabase, so it
       # needs the anon key. It cannot be made to work without one: dashboard.ts
       # fails loudly on a read error rather than degrading to an empty state,

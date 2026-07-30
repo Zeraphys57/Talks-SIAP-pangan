@@ -6,6 +6,11 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    // `src/lib/chartSegments.test.ts` runs under `node --test
+    // --experimental-strip-types`, whose ESM resolver requires the explicit
+    // `.ts` extension on relative imports. Safe here because `noEmit` is on —
+    // nothing is written, so no emitted path can be wrong.
+    "allowImportingTsExtensions": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
