@@ -121,10 +121,22 @@ keluaran tiga zona yang dijanjikan brief benar-benar bisa tercapai.
 historis harganya di atas kebiasaan tahunan komoditas itu. Ada penjaga cakupan:
 seri dengan riwayat terlalu pendek tidak dipaksa menghasilkan pola musiman.
 
-**`siap fuse`** — melebur ketiganya jadi satu tingkat peringatan per komoditas.
-Ada **gerbang koroborasi**: satu sinyal sendirian tidak cukup menaikkan peringatan
-ke tingkat tertinggi. Ini yang mencegah satu metode yang sedang gaduh membuat
-seluruh dashboard berwarna merah.
+**`siap fuse`** — melebur ketiganya jadi satu tingkat peringatan per komoditas:
+**tenang → waspada → siaga**. Ada **gerbang koroborasi**: satu sinyal sendirian
+tidak cukup menaikkan peringatan ke tingkat tertinggi. Ini yang mencegah satu
+metode yang sedang gaduh membuat seluruh dashboard berstatus siaga.
+
+Ada tingkat keempat, **`belum dapat dinilai`**, yang berada di luar urutan itu.
+Artinya tidak ada detektor yang bisa memberi skor untuk tanggal tersebut. Dulu
+kasus ini jatuh ke tingkat terendah dan terbaca "tidak ada yang aneh" — padahal
+yang benar adalah "belum diperiksa". Dua hal itu berbeda, dan sekarang ditulis
+berbeda.
+
+Perhatikan bahwa tingkat peringatan **sengaja tidak memakai kata merah/kuning/
+hijau**. Kata-kata itu dipakai oleh *zona* K-Means (`siap cluster`), yang
+merupakan besaran lain — zona dihitung per bulan, peringatan per hari, dan
+keduanya tampil di halaman yang sama. Sebelumnya keduanya memakai kosakata yang
+persis sama padahal berbeda pada 22,6% pasangan.
 
 ### 3.4 Verifikasi
 

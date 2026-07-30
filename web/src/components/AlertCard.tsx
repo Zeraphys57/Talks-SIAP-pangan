@@ -2,10 +2,11 @@
  * One commodity's status for one day.
  *
  * Level is carried by a text label first, a mark second, and colour only third.
- * `merah` and `hijau` are exactly the pair a red-green colour deficiency
+ * The red and green tones are exactly the pair a red-green colour deficiency
  * confuses, and they are the primary output of this system — a card that means
  * the opposite thing to roughly one reader in twelve is not an acceptable
- * design.
+ * design. Since the levels are named `siaga`/`waspada`/`tenang` rather than by
+ * colour, the label no longer leans on the tone to be read at all.
  *
  * Direction is stated on every non-green card, because the fusion score is
  * computed on |pct_change_7d| and therefore treats a crash exactly like a
@@ -20,9 +21,12 @@ import { COPY, LEVEL_LABEL, LEVEL_MARK, alertHeadline, direction } from "@/conte
 import { INTERACTION, MUTED } from "@/lib/ui";
 
 const TONE: Record<AlertRow["level"], string> = {
-  merah: "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/30",
-  kuning: "border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30",
-  hijau: "border-neutral-200 dark:border-neutral-800",
+  siaga: "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/30",
+  waspada: "border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30",
+  tenang: "border-neutral-200 dark:border-neutral-800",
+  // Dashed, and no fill: "we could not judge this" should not look like a
+  // verdict, and it must not borrow the calm card's styling.
+  belum_dapat_dinilai: "border-dashed border-neutral-300 dark:border-neutral-700",
 };
 
 export default function AlertCard({

@@ -29,7 +29,7 @@ def _cfg():
 # Weights
 # ---------------------------------------------------------------------------
 def test_weights_sum_to_one() -> None:
-    """Otherwise the merah threshold is unreachable and M7's sweep is unreadable."""
+    """Otherwise the siaga threshold is unreachable and M7's sweep is unreadable."""
     w = _cfg().weights
     assert w.anomaly + w.momentum + w.demand + w.corroboration == pytest.approx(1.0)
 
@@ -122,14 +122,14 @@ def test_corroboration_is_none_when_nothing_reported() -> None:
 # ---------------------------------------------------------------------------
 # Level assignment — the rules that stop a lone portal raising an alarm
 # ---------------------------------------------------------------------------
-def test_high_score_with_real_corroboration_is_merah() -> None:
+def test_high_score_with_real_corroboration_is_siaga() -> None:
     cfg = _cfg()
     inp = FusionInput(n_sources_reporting=3, n_sources_flagging=2)
     level, reason = assign_level(0.85, 2 / 3, inp, cfg)
-    assert level == "merah" and reason is None
+    assert level == "siaga" and reason is None
 
 
-def test_one_source_reporting_cannot_reach_merah() -> None:
+def test_one_source_reporting_cannot_reach_siaga() -> None:
     """C = 1/1 = 1.0 satisfies any ratio while corroborating nothing.
 
     This is not hypothetical: the newest day in the archive is routinely covered
@@ -139,16 +139,16 @@ def test_one_source_reporting_cannot_reach_merah() -> None:
     cfg = _cfg()
     inp = FusionInput(n_sources_reporting=1, n_sources_flagging=1)
     level, reason = assign_level(0.90, 1.0, inp, cfg)
-    assert level == "kuning"
+    assert level == "waspada"
     assert reason == "single_source_reporting"
 
 
-def test_lifetime_single_source_coverage_caps_at_kuning() -> None:
+def test_lifetime_single_source_coverage_caps_at_waspada() -> None:
     """nasional and kota_yogyakarta each have exactly one source, ever."""
     cfg = _cfg()
     inp = FusionInput(n_sources_reporting=1, n_sources_flagging=1, single_source_coverage=True)
     level, reason = assign_level(0.95, 1.0, inp, cfg)
-    assert level == "kuning"
+    assert level == "waspada"
     assert reason == "single_source_coverage"
 
 
@@ -156,18 +156,18 @@ def test_weak_agreement_among_many_sources_is_downgraded() -> None:
     cfg = _cfg()
     inp = FusionInput(n_sources_reporting=4, n_sources_flagging=1)
     level, reason = assign_level(0.80, 0.25, inp, cfg)
-    assert level == "kuning"
+    assert level == "waspada"
     assert reason == "insufficient_corroboration"
 
 
 def test_thresholds_partition_the_score_range() -> None:
     cfg = _cfg()
     inp = FusionInput(n_sources_reporting=3, n_sources_flagging=3)
-    assert assign_level(0.0, 1.0, inp, cfg)[0] == "hijau"
-    assert assign_level(0.39, 1.0, inp, cfg)[0] == "hijau"
-    assert assign_level(0.40, 1.0, inp, cfg)[0] == "kuning"
-    assert assign_level(0.69, 1.0, inp, cfg)[0] == "kuning"
-    assert assign_level(0.70, 1.0, inp, cfg)[0] == "merah"
+    assert assign_level(0.0, 1.0, inp, cfg)[0] == "tenang"
+    assert assign_level(0.39, 1.0, inp, cfg)[0] == "tenang"
+    assert assign_level(0.40, 1.0, inp, cfg)[0] == "waspada"
+    assert assign_level(0.69, 1.0, inp, cfg)[0] == "waspada"
+    assert assign_level(0.70, 1.0, inp, cfg)[0] == "siaga"
 
 
 # ---------------------------------------------------------------------------
@@ -206,7 +206,7 @@ def test_worked_example_matches_hand_arithmetic() -> None:
     assert result.components["D"] == pytest.approx(0.0)
     assert result.components["C"] == pytest.approx(1.0)
     assert result.score == pytest.approx(0.80)
-    assert result.level == "merah"
+    assert result.level == "siaga"
 
 
 def test_components_carry_everything_needed_to_decompose_an_alert() -> None:
@@ -215,11 +215,11 @@ def test_components_carry_everything_needed_to_decompose_an_alert() -> None:
         assert key in result.components, f"components missing {key}"
 
 
-def test_a_quiet_day_is_hijau_and_recommends_nothing_alarming() -> None:
+def test_a_quiet_day_is_tenang_and_recommends_nothing_alarming() -> None:
     cfg = _cfg()
     result = fuse(FusionInput(norm_zscore=0.05, pct_change_7d=0.002, n_sources_reporting=3), cfg)
-    assert result.level == "hijau"
-    assert result.recommendation_id == cfg.recommendations["hijau"]
+    assert result.level == "tenang"
+    assert result.recommendation_id == cfg.recommendations["tenang"]
 
 
 def test_score_is_bounded() -> None:

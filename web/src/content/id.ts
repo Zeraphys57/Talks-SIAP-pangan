@@ -4,9 +4,9 @@
  * Centralised because two specific wordings are easy to get wrong and were
  * identified during M6 (see `docs/design.md`):
  *
- * 1. `kuning` means the price is **unstable**, not that it is rising. It can be
- *    yellow while falling. Never write "harga naik" for a level.
- * 2. `merah` fires on |pct_change_7d|, so a *crash* scores like a spike. For a
+ * 1. `waspada` means the price is **unstable**, not that it is rising. It can be
+ *    waspada while falling. Never write "harga naik" for a level.
+ * 2. `siaga` fires on |pct_change_7d|, so a *crash* scores like a spike. For a
  *    warung owner those are opposite situations, so direction is carried by a
  *    separate function and the advice follows the direction, not the level.
  *
@@ -18,22 +18,29 @@
 import type { Level } from "@/lib/dashboard";
 
 export const LEVEL_LABEL: Record<Level, string> = {
-  merah: "Perlu perhatian",
-  kuning: "Kurang stabil",
-  hijau: "Wajar",
+  siaga: "Perlu perhatian",
+  waspada: "Kurang stabil",
+  tenang: "Wajar",
+  belum_dapat_dinilai: "Belum dapat dinilai",
 };
 
 export const LEVEL_MEANING: Record<Level, string> = {
-  merah: "Pergerakan harga jauh di luar kebiasaan komoditas ini.",
-  kuning: "Harga bergerak lebih besar dari biasanya, tapi belum ekstrem.",
-  hijau: "Tidak ada yang tidak biasa pada harga hari itu.",
+  siaga: "Pergerakan harga jauh di luar kebiasaan komoditas ini.",
+  waspada: "Harga bergerak lebih besar dari biasanya, tapi belum ekstrem.",
+  tenang: "Tidak ada yang tidak biasa pada harga hari itu.",
+  // Says what is missing, not what is safe. The old copy for this case was the
+  // `hijau` line above — "tidak ada yang tidak biasa" — which claimed the price
+  // had been checked and found normal when in fact nothing could check it.
+  belum_dapat_dinilai:
+    "Data hari itu belum cukup untuk menilai harganya. Ini bukan berarti harganya wajar — berarti belum bisa diperiksa.",
 };
 
-/** Level marks, chosen so the three are distinguishable without colour. */
+/** Level marks, chosen so the four are distinguishable without colour. */
 export const LEVEL_MARK: Record<Level, string> = {
-  merah: "▲▼",
-  kuning: "◆",
-  hijau: "●",
+  siaga: "▲▼",
+  waspada: "◆",
+  tenang: "●",
+  belum_dapat_dinilai: "?",
 };
 
 export type Direction = "naik" | "turun" | "datar";
@@ -47,12 +54,16 @@ export function direction(pctChange7d: number | null): Direction {
  * The headline sentence for one alert.
  *
  * Direction first, because that is what changes what the reader should do. A
- * level alone ("merah") tells a warung owner to worry without telling them
+ * level alone ("siaga") tells a warung owner to worry without telling them
  * whether to buy now or wait, which is the opposite of useful.
  */
 export function alertHeadline(level: Level, pctChange7d: number | null): string {
   const dir = direction(pctChange7d);
-  if (level === "hijau") return "Harga bergerak wajar";
+  // Checked before the direction: a 7-day move can exist for a date the
+  // detectors could not score, and leading with it would imply the movement was
+  // judged unusual when nothing judged it at all.
+  if (level === "belum_dapat_dinilai") return "Belum bisa dinilai hari itu";
+  if (level === "tenang") return "Harga bergerak wajar";
   if (dir === "datar") return "Harga bergerak tidak biasa minggu ini";
   return dir === "naik"
     ? "Harga naik tidak biasa minggu ini"
@@ -70,14 +81,14 @@ export function recommendation(
 ): string | null {
   const dir = direction(pctChange7d);
   switch (recommendationId) {
-    case "rec_merah_tunda_pembelian":
+    case "rec_siaga_tunda_pembelian":
       if (dir === "turun") {
         return "Harga sedang jauh di bawah kebiasaannya. Kalau bahan ini tahan disimpan, ini bisa jadi waktu yang murah untuk menambah stok.";
       }
       return "Kalau stok masih cukup, pertimbangkan menunda pembelian besar beberapa hari sambil melihat arah harga.";
-    case "rec_kuning_pantau":
+    case "rec_waspada_pantau":
       return "Belum perlu berubah, tapi ada baiknya dipantau beberapa hari ke depan sebelum belanja banyak.";
-    case "rec_hijau_aman":
+    case "rec_tenang_aman":
       return null; // Nothing unusual happened; saying so twice is noise.
     default:
       return null;
@@ -125,6 +136,10 @@ export const COPY = {
   needsAttention: "Perlu diperhatikan",
   normalPrices: "Bergerak wajar",
   allNormal: "Semua bahan bergerak wajar hari itu.",
+  notAssessed: "Belum dapat dinilai",
+  notAssessedHelp:
+    "Untuk bahan-bahan ini, data hari itu belum cukup untuk menilai harganya. " +
+    "Bukan berarti harganya wajar — berarti belum bisa diperiksa.",
 
   sourceCount: (n: number) => (n === 1 ? "1 sumber" : `${n} sumber`),
   vsBaseline: "dibanding rata-rata 30 hari",

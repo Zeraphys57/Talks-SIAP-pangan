@@ -35,14 +35,19 @@ components:
   # Three standard deviations of search interest saturates demand.
   demand_scale: 3.0
 
+# Escalation vocabulary: tenang < waspada < siaga, plus belum_dapat_dinilai when
+# no detector could score the date at all. Deliberately NOT the cluster zone
+# words — `cluster_assignments.zone` stays merah/kuning/hijau because proposal
+# Tujuan 3 commits to those in writing, and the two quantities disagree on 22.6%
+# of the pairs that render on the same page. See docs/methods.md.
 thresholds:
-  # F at or above this is merah — but only with corroboration; see below.
-  merah: 0.70
-  kuning: 0.40
+  # F at or above this is siaga — but only with corroboration; see below.
+  siaga: 0.70
+  waspada: 0.40
 
-  # merah additionally requires C >= this. A single portal shouting on its own
+  # siaga additionally requires C >= this. A single portal shouting on its own
   # is not enough to tell a warung owner to change their buying.
-  merah_min_corroboration: 0.5
+  siaga_min_corroboration: 0.5
 
   # ...and at least this many sources must have reported that day.
   #
@@ -52,7 +57,7 @@ thresholds:
   # recent day in the archive is routinely covered by one portal only, because
   # the others publish later, so *every* "today" alert would have claimed
   # unanimous agreement from a single source.
-  merah_min_sources_reporting: 2
+  siaga_min_sources_reporting: 2
 
 corroboration:
   # ---------------------------------------------------------------------------
@@ -74,14 +79,18 @@ corroboration:
 
   # When a commodity x region has only ever had one reporting source, C is
   # undefined rather than zero: there is nothing to corroborate with. Those
-  # alerts are capped at kuning with components.reason = "single_source_coverage".
+  # alerts are capped at waspada with components.reason = "single_source_coverage".
   # nasional (sp2kp only) and kota_yogyakarta (jogja only) are both in this
   # position — see docs/sources.md.
-  single_source_caps_at_kuning: true
+  single_source_caps_at_waspada: true
 
 recommendations:
   # Keys into the Bahasa Indonesia copy in web/. Phrased as an observation plus
   # an option, never a command — "pertimbangkan menunda", not "jangan beli".
-  merah: rec_merah_tunda_pembelian
-  kuning: rec_kuning_pantau
-  hijau: rec_hijau_aman
+  #
+  # `belum_dapat_dinilai` deliberately has no entry: the honest thing to say
+  # when nothing could be scored is that nothing was scored, and the dashboard
+  # says that instead of offering advice derived from an absent number.
+  siaga: rec_siaga_tunda_pembelian
+  waspada: rec_waspada_pantau
+  tenang: rec_tenang_aman

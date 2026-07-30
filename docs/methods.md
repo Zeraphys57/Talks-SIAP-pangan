@@ -164,19 +164,30 @@ cum_change`. Zones describe how a price **has behaved**, not where it will go.
 * **D** — demand from Trends. Currently 0 everywhere (see below).
 * **C** — corroboration: the fraction of reporting sources that also moved.
 
-Thresholds: `merah` ≥ 0.70, `kuning` ≥ 0.40. `merah` additionally requires
+Thresholds: `siaga` ≥ 0.70, `waspada` ≥ 0.40. `siaga` additionally requires
 corroboration ≥ 0.5 **and** at least 2 sources reporting. Without the second
 condition, a single-source day gives C = 1/1 = 1.0 and produced 1,053 spurious
-`merah` alerts; with it, 665.
+`siaga` alerts; with it, 665.
+
+**Why the fusion levels are not spelled `merah`/`kuning`/`hijau`.** They were,
+and so was `cluster_assignments.zone`. The two are different quantities — the
+zone is a monthly K-Means regime, the level a daily fusion score — and they
+disagree on **22.6% of 39,089 pairs**, including 272 cells rendered on the same
+page where the zone reads `merah` and the level `hijau`. The zone keeps the
+colour words because proposal Tujuan 3 commits in writing to K-Means producing
+"zona strategis (merah, kuning, hijau)"; fusion carries no such commitment, so
+fusion moved to an escalation vocabulary: `hijau → tenang`, `kuning → waspada`,
+`merah → siaga`. This also gives the dashboard's primary signal names that carry
+meaning without colour, which is what `docs/design.md` asks for.
 
 **The demand weight is currently inert, not robust.** Perturbing it gives
 Spearman exactly 1.0000 — because Trends is throttled, D = 0 on every scored day,
 so the weight only rescales the score against fixed thresholds. It is reported
 as inert because a perfect rank correlation otherwise reads as reassurance and
-means the opposite. The level counts still move sharply (merah 1,406 vs 94),
+means the opposite. The level counts still move sharply (`siaga` 1,406 vs 94),
 which is the same fact from the other side.
 
-**`merah` fires on |pct_change_7d|, so a crash scores like a spike.** For a
+**`siaga` fires on |pct_change_7d|, so a crash scores like a spike.** For a
 warung owner those are opposite situations, which is why the dashboard states
 direction on every alert and inverts the recommendation on a fall
 (`docs/design.md`).

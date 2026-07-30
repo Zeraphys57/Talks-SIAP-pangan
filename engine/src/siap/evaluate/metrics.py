@@ -195,7 +195,7 @@ def load_detections(
                 on gc.commodity_id = al.commodity_id
                and gc.region_id   = al.region_id
                and gc.obs_date    = al.obs_date
-             where al.run_id = %s and al.level in ('merah', 'kuning')
+             where al.run_id = %s and al.level in ('siaga', 'waspada')
             """,
             (fusion_run_id,),
         )

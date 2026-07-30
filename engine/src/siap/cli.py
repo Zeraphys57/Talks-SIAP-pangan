@@ -14,6 +14,7 @@ import statistics
 import sys
 import textwrap
 from datetime import date, datetime
+from typing import Any
 
 import click
 
@@ -28,6 +29,19 @@ from .settings import MissingSetting, database_url, redact_dsn
 
 OK = "  ok  "
 BAD = " FAIL "
+
+# Two vocabularies, deliberately: the cluster zone keeps the colour words the
+# proposal committed to, the fusion level uses escalation words that mean
+# something read aloud. Keeping the maps separate is what stops one being
+# rendered with the other's palette. `belum_dapat_dinilai` gets no colour at
+# all — it is the absence of a judgement, not a quiet one.
+ZONE_COLOUR = {"merah": "red", "kuning": "yellow", "hijau": "green"}
+LEVEL_COLOUR: dict[str, str | None] = {
+    "siaga": "red",
+    "waspada": "yellow",
+    "tenang": "green",
+    "belum_dapat_dinilai": None,
+}
 
 
 def _fatal(message: str) -> None:
@@ -807,7 +821,7 @@ def cluster_cmd() -> None:
     click.echo(f"  {'cluster':>8}{'volatility':>13}{'cum_change':>13}{'cells':>8}   zone")
     for cluster_id, centroid in sorted(model.centroids.items()):
         zone = model.zone_mapping[cluster_id]
-        colour = {"merah": "red", "kuning": "yellow", "hijau": "green"}[zone]
+        colour = ZONE_COLOUR[zone]
         click.echo(
             f"  {cluster_id:>8}{centroid['volatility']:>13.5f}"
             f"{centroid['cum_change'] * 100:>12.2f}%{centroid['n_cells']:>8}   "
@@ -837,8 +851,10 @@ def cluster_cmd() -> None:
     click.echo(f"ZONES FOR THE MOST RECENT MONTH ({zones[0]['period_month'] if zones else '-'})")
     click.echo("=" * 96)
     for r in zones:
-        zone = str(r["zone"])
-        colour = {"merah": "red", "kuning": "yellow", "hijau": "green"}[zone]
+        # A gated cell has no zone; it still prints, because the whole point of
+        # keeping the row was that its exclusion stays visible.
+        zone = str(r["zone"]) if r["zone"] else "-gated-"
+        colour = ZONE_COLOUR.get(zone)
         badge = click.style(zone.upper().ljust(7), fg=colour)
         click.echo(
             f"  {badge}{r['region']!s:<17}{r['commodity']!s:<24}"
@@ -925,19 +941,23 @@ def fuse_cmd(board: int) -> None:
     click.echo(f"ALERT BOARD — {rows[0]['obs_date'] if rows else '(none)'}")
     click.echo("=" * 112)
     click.echo(
-        f"  {'level':<8}{'region':<17}{'commodity':<24}"
+        f"  {'level':<20}{'region':<17}{'commodity':<24}"
         f"{'F':>8}{'A':>8}{'M':>8}{'D':>8}{'C':>8}  both  src  reason"
     )
     for r in rows[:board]:
         comp = r["components"]
         level = str(r["level"])
-        colour = {"merah": "red", "kuning": "yellow", "hijau": "green"}[level]
-        c_val = comp.get("C")
+        colour = LEVEL_COLOUR.get(level)
+
+        def num(value: Any) -> str:
+            """`n/a` rather than 0.0000 — an unscored date is not a calm one."""
+            return "     n/a" if value is None else f"{float(value):>8.4f}"
+
         click.echo(
-            f"  {click.style(level.ljust(8), fg=colour)}{r['region']!s:<17}{r['commodity']!s:<24}"
-            f"{float(r['fusion_score']):>8.4f}{float(comp['A']):>8.4f}{float(comp['M']):>8.4f}"
-            f"{float(comp['D']):>8.4f}"
-            f"{('  n/a' if c_val is None else f'{float(c_val):>8.4f}')}"
+            f"  {click.style(level.ljust(20), fg=colour)}"
+            f"{r['region']!s:<17}{r['commodity']!s:<24}"
+            f"{num(r['fusion_score'])}{num(comp.get('A'))}{num(comp.get('M'))}"
+            f"{num(comp.get('D'))}{num(comp.get('C'))}"
             f"{str(comp['both_flagged'])[:1]:>6}"
             f"{int(comp['n_sources_reporting']):>5}  {comp.get('reason', '')}"
         )
@@ -1167,11 +1187,12 @@ def ablate_cmd() -> None:
     if base is not None:
         click.echo(
             f"  baseline: {base.n_scored} scored, "
-            f"merah={base.merah} kuning={base.kuning} hijau={base.hijau}"
+            f"siaga={base.siaga} waspada={base.waspada} tenang={base.tenang} "
+            f"belum_dapat_dinilai={base.belum_dapat_dinilai}"
         )
     click.echo(
         f"\n  {'weight':<14} {'delta':>6} {'value':>6} {'spearman':>9} "
-        f"{'lvl changed':>12} {'merah':>7} {'kuning':>7}"
+        f"{'lvl changed':>12} {'siaga':>7} {'waspada':>8}"
     )
     for wpoint in report.weight_points:
         if not wpoint.ok:
@@ -1183,7 +1204,7 @@ def ablate_cmd() -> None:
         click.echo(
             f"  {wpoint.weight:<14} {wpoint.delta:>+6.2f} {wpoint.value:>6.2f} "
             f"{wpoint.spearman:>9.4f} {wpoint.level_changes:>12} "
-            f"{wpoint.merah:>7} {wpoint.kuning:>7}{flag}"
+            f"{wpoint.siaga:>7} {wpoint.waspada:>8}{flag}"
         )
 
     inert = {p.weight: p.inert_because for p in report.weight_points if p.inert_because}

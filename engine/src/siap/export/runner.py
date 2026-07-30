@@ -169,9 +169,10 @@ def run(
                         "value": round(p.value, 4),
                         "spearman": round(p.spearman, 6),
                         "levels_changed": p.level_changes,
-                        "merah": p.merah,
-                        "kuning": p.kuning,
-                        "hijau": p.hijau,
+                        "siaga": p.siaga,
+                        "waspada": p.waspada,
+                        "tenang": p.tenang,
+                        "belum_dapat_dinilai": p.belum_dapat_dinilai,
                         "inert": bool(p.inert_because),
                     }
                     for p in ablation.weight_points

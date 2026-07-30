@@ -551,7 +551,7 @@ class FusionWeights(_Strict):
         if abs(total - 1.0) > 1e-9:
             raise ValueError(
                 f"fusion weights must sum to 1.0, got {total}. A score that cannot "
-                f"reach 1 makes the merah threshold unreachable and the sweep in M7 "
+                f"reach 1 makes the siaga threshold unreachable and the sweep in M7 "
                 f"uninterpretable."
             )
         return self
@@ -564,24 +564,26 @@ class FusionComponents(_Strict):
 
 
 class FusionThresholds(_Strict):
-    merah: float = Field(gt=0, le=1)
-    kuning: float = Field(gt=0, le=1)
-    merah_min_corroboration: float = Field(ge=0, le=1)
+    siaga: float = Field(gt=0, le=1)
+    waspada: float = Field(gt=0, le=1)
+    siaga_min_corroboration: float = Field(ge=0, le=1)
     # C = 1/1 = 1.0 satisfies any ratio threshold while corroborating nothing,
     # so the count is gated separately from the ratio.
-    merah_min_sources_reporting: int = Field(ge=1)
+    siaga_min_sources_reporting: int = Field(ge=1)
 
     @model_validator(mode="after")
     def _ordered(self) -> FusionThresholds:
-        if self.kuning >= self.merah:
-            raise ValueError(f"kuning threshold ({self.kuning}) must be below merah ({self.merah})")
+        if self.waspada >= self.siaga:
+            raise ValueError(
+                f"waspada threshold ({self.waspada}) must be below siaga ({self.siaga})"
+            )
         return self
 
 
 class CorroborationParams(_Strict):
     pct_change_window_days: int = Field(gt=0)
     pct_change_threshold: float = Field(gt=0)
-    single_source_caps_at_kuning: bool
+    single_source_caps_at_waspada: bool
 
 
 class FusionConfig(_Strict):
@@ -593,7 +595,7 @@ class FusionConfig(_Strict):
 
     @model_validator(mode="after")
     def _recommendations_cover_every_level(self) -> FusionConfig:
-        missing = {"merah", "kuning", "hijau"} - set(self.recommendations)
+        missing = {"siaga", "waspada", "tenang"} - set(self.recommendations)
         if missing:
             raise ValueError(f"recommendations missing for level(s): {sorted(missing)}")
         return self

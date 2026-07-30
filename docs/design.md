@@ -23,24 +23,38 @@ The strongest permitted statement is of the form *"harga X naik Y% dibanding
 rata-rata 30 hari terakhir, dan sudah bertahan Z hari"*. Everything else is
 context for that sentence.
 
-## The three levels, and the copy trap in each
+## The four levels, and the copy trap in each
 
-`merah` / `kuning` / `hijau` come from the fusion score. The obvious copy for
-them is wrong in two specific ways, both recorded during M6:
+`siaga` / `waspada` / `tenang` come from the fusion score, plus
+`belum_dapat_dinilai` for a date no detector could score. The obvious copy for
+them is wrong in three specific ways, the first two recorded during M6:
 
-**`kuning` does not mean "harga naik".** It means the price is behaving
+**`waspada` does not mean "harga naik".** It means the price is behaving
 unusually — unstable, moving more than this commodity normally moves. It can be
-yellow while falling. Copy must say *"harga tidak stabil"*, never *"harga
+`waspada` while falling. Copy must say *"harga tidak stabil"*, never *"harga
 naik"*.
 
-**`merah` can fire on a crash.** The fusion score uses `|pct_change_7d|`, so a
+**`siaga` can fire on a crash.** The fusion score uses `|pct_change_7d|`, so a
 collapse scores exactly like a spike. For a warung owner these are opposite
 situations: a spike means delay the purchase, a crash means buy now. **Every
 alert must state its direction**, and the recommendation must follow the
 direction rather than the level alone.
 
-`hijau` means "nothing unusual", not "cheap". A commodity can sit at a
-historically high price perfectly stably and be green.
+`tenang` means "nothing unusual", not "cheap". A commodity can sit at a
+historically high price perfectly stably and be `tenang`.
+
+**`belum_dapat_dinilai` is not a fourth severity — it sits outside the
+ordering.** It means no detector produced a score for that date, which the
+system previously rendered as `hijau`: absence of evidence shown as evidence of
+safety, on 41.31% of `nasional` dates. Its copy must say what is *missing*, and
+must never be grouped under "bergerak wajar". It carries no recommendation,
+because there is no observation to base one on.
+
+**The level names are deliberately not the cluster zone names.** `zone` stays
+`merah`/`kuning`/`hijau` — the proposal commits to those words — and both render
+on the commodity page while disagreeing on 22.6% of pairs. Two different
+quantities spelled identically on one screen is a defect, and the one without a
+textual commitment is the one that moved.
 
 ## Recommendations are observations plus an option
 
@@ -75,9 +89,15 @@ for. Numbers use tabular figures so a column of prices aligns.
 
 **Colour is never the only signal.** Level is carried by a text label first,
 then an icon shape, then colour. Roughly 8% of men have some red-green colour
-deficiency, and `merah`/`hijau` is precisely the confusable pair. Red and green
-that cannot be told apart would make the primary output of this system unusable
-for that reader.
+deficiency, and the red/green tone pair is precisely the confusable one. Red and
+green that cannot be told apart would make the primary output of this system
+unusable for that reader.
+
+Renaming the levels to `siaga`/`waspada`/`tenang` closed the last place this
+rule was being satisfied on a technicality: the label itself used to be a colour
+word, so "the text carries the meaning" was true only for a reader who already
+knew what the colour meant. The names now escalate in plain Indonesian, and the
+tones are decoration.
 
 **Rupiah in full, never abbreviated.** "Rp 62.500", not "Rp 62,5rb". The
 abbreviation saves a few characters and introduces an ambiguity into the one

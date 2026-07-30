@@ -10,15 +10,31 @@ the definition:
 
     F = 0.45*A + 0.25*M + 0.20*D + 0.10*C
 
-Level assignment is not a pure function of F. `merah` additionally requires
+Level assignment is not a pure function of F. `siaga` additionally requires
 corroboration: a single portal shouting on its own is not enough to tell a
 warung owner to change what they buy. Where a commodity and region have only one
-reporting source at all, the alert is capped at `kuning` and the reason recorded
+reporting source at all, the alert is capped at `waspada` and the reason recorded
 — that is the honest answer when nothing can corroborate.
 
 Every component is returned alongside the score. An alert a mentor cannot
 decompose by hand is an alert that cannot be defended, so the breakdown is
 stored rather than recomputed at render time.
+
+## Why these level names are not the cluster zone names
+
+`alerts.level` and `cluster_assignments.zone` were both `merah/kuning/hijau`,
+and both render on the commodity page. They are different quantities — the zone
+is a monthly K-Means regime, the level is a daily fusion score — and they
+disagree on 22.6% of pairs. The zone keeps the colour words because proposal
+Tujuan 3 commits in writing to K-Means producing "zona strategis (merah, kuning,
+hijau)"; fusion carries no such commitment, so fusion is what moved:
+
+    hijau  -> tenang
+    kuning -> waspada
+    merah  -> siaga
+
+A side benefit design.md asks for: the dashboard's primary signal now has names
+that carry meaning without colour.
 """
 
 from __future__ import annotations
@@ -31,7 +47,7 @@ from ..config import FusionConfig
 
 log = logging.getLogger(__name__)
 
-LEVELS = ("hijau", "kuning", "merah")
+LEVELS = ("tenang", "waspada", "siaga")
 
 
 @dataclass
@@ -108,28 +124,28 @@ def assign_level(
     score: float, corroboration: float | None, inp: FusionInput, cfg: FusionConfig
 ) -> tuple[str, str | None]:
     """Map score to level, applying the corroboration rules. Returns (level, reason)."""
-    if score < cfg.thresholds.kuning:
-        return "hijau", None
-    if score < cfg.thresholds.merah:
-        return "kuning", None
+    if score < cfg.thresholds.waspada:
+        return "tenang", None
+    if score < cfg.thresholds.siaga:
+        return "waspada", None
 
-    # Score qualifies for merah; now the corroboration gates. Three distinct
+    # Score qualifies for siaga; now the corroboration gates. Three distinct
     # ways corroboration can be absent, each recorded separately so the reason
-    # a merah was withheld is inspectable rather than inferred.
-    if inp.single_source_coverage and cfg.corroboration.single_source_caps_at_kuning:
+    # a siaga was withheld is inspectable rather than inferred.
+    if inp.single_source_coverage and cfg.corroboration.single_source_caps_at_waspada:
         # This commodity x region has only ever had one source. Nothing can
         # corroborate, today or ever.
-        return "kuning", "single_source_coverage"
+        return "waspada", "single_source_coverage"
     if corroboration is None:
-        return "kuning", "no_sources_reporting"
-    if inp.n_sources_reporting < cfg.thresholds.merah_min_sources_reporting:
+        return "waspada", "no_sources_reporting"
+    if inp.n_sources_reporting < cfg.thresholds.siaga_min_sources_reporting:
         # Several sources exist, but only one reported today — typically the
         # most recent day, before the slower portals publish. C would be 1/1
         # and read as unanimous agreement from a single voice.
-        return "kuning", "single_source_reporting"
-    if corroboration < cfg.thresholds.merah_min_corroboration:
-        return "kuning", "insufficient_corroboration"
-    return "merah", None
+        return "waspada", "single_source_reporting"
+    if corroboration < cfg.thresholds.siaga_min_corroboration:
+        return "waspada", "insufficient_corroboration"
+    return "siaga", None
 
 
 def fuse(inp: FusionInput, cfg: FusionConfig) -> FusionResult:

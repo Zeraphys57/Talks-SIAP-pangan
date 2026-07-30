@@ -222,9 +222,10 @@ class WeightPoint:
     spearman: float = 0.0
     level_changes: int = 0
     n_scored: int = 0
-    merah: int = 0
-    kuning: int = 0
-    hijau: int = 0
+    siaga: int = 0
+    waspada: int = 0
+    tenang: int = 0
+    belum_dapat_dinilai: int = 0
     # Set when the term this weight multiplies never varies, which makes a
     # perfect Spearman meaningless.
     inert_because: str | None = None
@@ -300,9 +301,10 @@ def weight_sensitivity(
             spearman=_spearman(baseline_scores, scores),
             level_changes=sum(1 for a, b in zip(baseline_levels, levels, strict=True) if a != b),
             n_scored=len(results),
-            merah=levels.count("merah"),
-            kuning=levels.count("kuning"),
-            hijau=levels.count("hijau"),
+            siaga=levels.count("siaga"),
+            waspada=levels.count("waspada"),
+            tenang=levels.count("tenang"),
+            belum_dapat_dinilai=levels.count("belum_dapat_dinilai"),
         )
 
     # The baseline row carries no single "value"; nan keeps the column honest

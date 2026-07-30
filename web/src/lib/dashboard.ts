@@ -37,7 +37,16 @@ export const db = createClient(url, anonKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
-export type Level = "merah" | "kuning" | "hijau";
+/**
+ * The daily fusion escalation. Deliberately not the cluster zone vocabulary:
+ * `cluster_assignments.zone` is still merah/kuning/hijau, it is a different
+ * quantity, and both render on the commodity page.
+ *
+ * `belum_dapat_dinilai` is not a fourth severity — it sits outside the ordering.
+ * It means no detector could score the date, which used to be rendered as
+ * `hijau` and therefore as "nothing unusual happened".
+ */
+export type Level = "siaga" | "waspada" | "tenang" | "belum_dapat_dinilai";
 
 export type Region = {
   id: number;
@@ -51,7 +60,8 @@ export type AlertRow = {
   commodity_name: string;
   canonical_unit: string;
   level: Level;
-  fusion_score: number;
+  /** Null exactly when the level is `belum_dapat_dinilai`. */
+  fusion_score: number | null;
   obs_date: string;
   price: number | null;
   pctChange7d: number | null;
@@ -180,7 +190,7 @@ export type Board = {
 type AlertJoin = {
   obs_date: string;
   level: Level;
-  fusion_score: number;
+  fusion_score: number | null;
   components: Record<string, unknown> | null;
   recommendation_id: string | null;
   commodities: { slug: string; display_name: string; canonical_unit: string } | null;
@@ -224,7 +234,10 @@ export async function fetchBoard(regionSlug: string): Promise<Board | null> {
       .eq("run_id", runId)
       .eq("region_id", region.id)
       .eq("obs_date", obsDate)
-      .order("fusion_score", { ascending: false }),
+      // nullsFirst: false keeps the unscored rows at the bottom. Postgres sorts
+      // NULLs first under DESC by default, which would put every commodity we
+      // could not judge at the top of the board.
+      .order("fusion_score", { ascending: false, nullsFirst: false }),
     db
       .from("alerts")
       .select("obs_date")
@@ -253,7 +266,7 @@ export async function fetchBoard(regionSlug: string): Promise<Board | null> {
           commodity_name: r.commodities!.display_name,
           canonical_unit: r.commodities!.canonical_unit,
           level: r.level,
-          fusion_score: Number(r.fusion_score),
+          fusion_score: r.fusion_score === null ? null : Number(r.fusion_score),
           obs_date: r.obs_date,
           price: prices.get(slug) ?? null,
           pctChange7d: numberOrNull(c["pct_change_7d"]),

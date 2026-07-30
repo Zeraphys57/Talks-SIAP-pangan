@@ -48,8 +48,14 @@ export default async function RegionPage({
   const [board, lastUpdated] = await Promise.all([fetchBoard(region), fetchLastUpdated()]);
   if (!board) notFound();
 
-  const attention = board.alerts.filter((a) => a.level !== "hijau");
-  const calm = board.alerts.filter((a) => a.level === "hijau");
+  // Three buckets, not two. `belum_dapat_dinilai` belongs in neither of the
+  // original ones: it is not something to act on, and filing it under "bergerak
+  // wajar" would be the exact claim this level exists to stop making.
+  const attention = board.alerts.filter(
+    (a) => a.level === "siaga" || a.level === "waspada",
+  );
+  const calm = board.alerts.filter((a) => a.level === "tenang");
+  const unjudged = board.alerts.filter((a) => a.level === "belum_dapat_dinilai");
 
   return (
     <main className={PAGE.board}>
@@ -91,7 +97,11 @@ export default async function RegionPage({
         </section>
       )}
 
-      {board.obsDate && attention.length === 0 && (
+      {/* `calm.length > 0` guards a specific lie: if every commodity landed in
+          belum_dapat_dinilai, nothing was found to be normal — nothing was
+          checked. "Semua bahan bergerak wajar" would be the strongest possible
+          claim drawn from the weakest possible evidence. */}
+      {board.obsDate && attention.length === 0 && calm.length > 0 && (
         <p className="rounded-lg border border-neutral-200 px-4 py-4 text-sm dark:border-neutral-800">
           {COPY.allNormal}
         </p>
@@ -102,6 +112,18 @@ export default async function RegionPage({
           <h2 className={`text-sm font-medium ${MUTED}`}>{COPY.normalPrices}</h2>
           <div className={CARD_GRID}>
             {calm.map((alert) => (
+              <AlertCard key={alert.commodity_slug} alert={alert} regionSlug={region} compact />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {unjudged.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <h2 className={`text-sm font-medium ${MUTED}`}>{COPY.notAssessed}</h2>
+          <p className={`text-xs leading-relaxed ${MUTED}`}>{COPY.notAssessedHelp}</p>
+          <div className={CARD_GRID}>
+            {unjudged.map((alert) => (
               <AlertCard key={alert.commodity_slug} alert={alert} regionSlug={region} compact />
             ))}
           </div>
