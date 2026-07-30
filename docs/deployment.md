@@ -41,6 +41,41 @@ Node 22 comes from `web/package.json` → `engines.node`, so there is nothing to
 configure. Build command, output directory and install command are all correct
 by default.
 
+The framework is pinned in `web/vercel.json`:
+
+```json
+{ "framework": "nextjs" }
+```
+
+`vercel.json` takes precedence over Project Settings, so framework detection is
+recorded in the repo and reviewable in a diff rather than depending on a
+dashboard field. It lives in `web/` because Vercel reads `vercel.json` from the
+Root Directory, not the repo root. Note it only overrides the keys it names:
+Root Directory is not among them and still has to be set in the dashboard.
+
+### Two failure signatures, and what each one means
+
+Both were hit during the first deployment. They look similar — a red build — and
+have nothing to do with each other.
+
+| build log says | duration | cause |
+|---|---|---|
+| `No Next.js version detected` | ~2 s | Root Directory is not `web`, so there is no `package.json` to read |
+| `No Output Directory named "public" found` | ~70 s | Vercel is not treating the project as Next.js, so it looks for a static site |
+
+The second one is confusing because the build *succeeds* — pages compile and
+generate — and only the publish step fails. The tell is a missing
+`Detected Next.js version` line in the log. `web/vercel.json` now prevents it.
+
+**Check the project list before debugging anything.** Importing the repo twice
+produces two projects that both build on every push and fail in different ways,
+and it is easy to spend hours reading the logs of one while changing the
+settings of the other. One repo, one project.
+
+Also note that *Redeploy* rebuilds the **same commit** as the deployment it was
+launched from — it does not pick up newer commits. To build something new, push,
+or redeploy the deployment that push created.
+
 ### 2. Environment variables
 
 Exactly two, both marked for Production, Preview and Development:
@@ -78,7 +113,7 @@ Accounts already exist. What they need is the URL and the rules.
 **Send them:**
 
 > Pelabelan ground truth SIAP-PANGAN
-> `https://<your-deployment>/lab`
+> `https://talks-siap-pangan.vercel.app/lab`
 > Masuk pakai email dan kata sandi yang sudah dibuat koordinator.
 >
 > Tiga hal penting:

@@ -14,6 +14,9 @@ commodity, and presents the result as a mobile-first dashboard for UMKM owners.
 > anomalies that have already happened, classifies current conditions, and
 > surfaces recurring historical patterns. **It does not forecast prices.**
 
+**Live dashboard:** <https://talks-siap-pangan.vercel.app> — labelling console at
+`/lab`, reachable only with an annotator account.
+
 ## Layout
 
 | Path | What lives there |
@@ -140,10 +143,11 @@ pipeline. See [`docs/reproducibility.md`](docs/reproducibility.md).
 
 ## Deploying, and starting the study
 
-`web/` is the only thing hosted; the engine runs on GitHub Actions against the
-same Supabase project. Root directory `web`, two `NEXT_PUBLIC_*` environment
-variables, nothing else. Full steps — including credential rotation, which
-should happen first — are in [`docs/deployment.md`](docs/deployment.md).
+`web/` is the only thing hosted, at <https://talks-siap-pangan.vercel.app>; the
+engine runs on GitHub Actions against the same Supabase project. Root directory
+`web`, two `NEXT_PUBLIC_*` environment variables, nothing else. Full steps —
+including credential rotation, which should happen first — are in
+[`docs/deployment.md`](docs/deployment.md).
 
 Before Grace and Roy label anything:
 

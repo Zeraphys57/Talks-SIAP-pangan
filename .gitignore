@@ -31,6 +31,15 @@ engine/.cache/
 paper-exports/*
 !paper-exports/.gitkeep
 
+# --- agent / assistant scratch (deliberately never published) -----------------
+# This is a research repository: the paper reports the method, and how the code
+# was written is not part of the method. Kept out of the published history on
+# purpose, not by accident — a machine-local ignore file does not travel with a
+# clone, so the rule belongs here.
+CLAUDE.md
+**/CLAUDE.md
+.claude/
+
 # --- os ----------------------------------------------------------------------
 .DS_Store
 Thumbs.db
