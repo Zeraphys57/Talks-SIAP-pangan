@@ -302,6 +302,43 @@ waktunya, makin besar peluang mereka mendiskusikan kandidat sebelum keduanya
 selesai. **Ulangi aturan "jangan diskusi dulu" secara berkala**, jangan disebut
 sekali saja di awal.
 
+### Kalau dicicil, apakah datanya jadi beda? Tidak.
+
+Pertanyaan yang wajar: pipeline jalan tiap hari 02:00 WIB, jadi kalau Grace
+melabel tanggal 30 lalu lanjut tanggal 2, bukankah yang dia lihat sudah berubah —
+sementara redraw dilarang setelah label pertama?
+
+Tidak berubah, karena **yang dilihat annotator dibekukan saat pool ditarik**:
+
+1. `siap gt-pool` memateralisasi jendela harga tiap kandidat ke dalam kolom
+   `gt_candidates.context` (JSONB: `window`, `baseline`, `focus_date`,
+   `definition_pct`), bersama `shuffle_key` untuk urutan tetap dan
+   `generated_by_run` yang mencatat run analisis pembuatnya.
+2. Fungsi `lab_queue` mengembalikan kolom `context` itu — bukan hasil query ulang
+   ke tabel harga.
+3. `web/src/app/lab/PriceWindow.tsx` tidak memuat data sama sekali: tidak ada
+   `fetch`, `supabase`, `.from(`, maupun `.rpc(`. Dia murni merender props yang
+   diberikan `page.tsx:326`.
+
+Jadi run harian menulis ke `price_daily_unified` dan `anomaly_scores` — dua tabel
+yang konsol pelabelan **tidak pernah baca**. Kandidat nomor 200 hari ini adalah
+kandidat nomor 200 yang sama persis dua minggu lagi.
+
+**Aturan redraw itu tentang satu momen: sebelum label pertama.** Snapshot yang
+dibekukan harus mewakili data yang sedang diteliti. Setelah dibekukan dan
+pelabelan dimulai, pembekuan itu justru properti yang diinginkan — dan itu
+sebabnya `--redraw` menolak sesudahnya. Bukan karena data yang bergerak
+membatalkan label, tapi karena menarik ulang akan membuang snapshot yang
+label-label itu tunjuk, meninggalkan label yang mengacu ke kandidat yang sudah
+tidak ada. Dua aturan yang terlihat bertabrakan sebenarnya satu: **bekukan
+sekali, di saat yang tepat, lalu jangan diutak-utik.**
+
+> **Sampaikan ini ke annotator.** Jangan membandingkan apa yang terlihat di
+> `/lab` dengan dashboard publik. Lab dibekukan di waktu pool ditarik, dashboard
+> terus maju setiap hari — makin lama pelabelan berjalan, makin jauh keduanya
+> berbeda, dan itu **bukan** kekeliruan. Nilai apa yang ada di layar lab, jangan
+> menyilang-cek ke dashboard.
+
 ### Langkah 6 — Setelah keduanya selesai
 
 ```bash
