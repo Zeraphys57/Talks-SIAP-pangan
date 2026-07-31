@@ -223,15 +223,27 @@ def flag_counts_table(conn: Conn, anomaly_run_id: int) -> Table:
 
 
 def k_search_table(rows: list[dict[str, Any]]) -> Table:
+    # Computed, not written down: the margin moves with the data, and a note that
+    # hardcodes it goes stale without anything failing. That is exactly how this
+    # table came to carry an editorial constraint two milestones after its removal.
+    selected = next((r for r in rows if r["selected"]), None)
+    runner_up = max(
+        (r for r in rows if not r["selected"]), key=lambda r: r["silhouette"], default=None
+    )
+    if selected is None or runner_up is None:
+        note = "Every k in the search range is fitted, scored and reported."
+    else:
+        note = (
+            f"k={selected['k']} is selected on silhouette alone, ahead of k={runner_up['k']} "
+            f"by {selected['silhouette'] - runner_up['silhouette']:.4f}. The three-zone floor "
+            f"that once excluded k=2 was removed in M10; every k in the range is fitted, "
+            f"scored and reported, and the highest score wins."
+        )
     return Table(
         slug="tab_k_search",
         caption="K-Means model selection: silhouette and inertia across the search range.",
         rows=rows,
-        note=(
-            "k=2 scores highest but cannot be selected: two clusters cannot populate a "
-            "three-zone output. The constraint is editorial, so the point is reported "
-            "rather than hidden."
-        ),
+        note=note,
     )
 
 

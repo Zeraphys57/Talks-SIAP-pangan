@@ -264,11 +264,13 @@ def search_k(scaled: np.ndarray, params: KMeansParams, seed: int) -> tuple[list[
 
     **k is selected, not forced.** There was a `k_select_min = 3` floor here,
     because on the raw features the silhouette preferred k=2 (0.7896 against
-    0.7057 for k=3) and two clusters leave `kuning` unreachable. That floor was
-    removed once measurement 1 showed *why* k=2 won: the volatility feature was
-    inflated on regions whose portals skip days, which smeared the middle of the
-    distribution. With returns normalised by sqrt(days elapsed), k=3 wins the
-    silhouette outright (0.8019 against 0.7984 for k=2) and no floor is needed.
+    0.7057 for k=3, run #68) and two clusters leave `kuning` unreachable. That
+    floor was removed once measurement 1 showed *why* k=2 won: the volatility
+    feature was inflated on regions whose portals skip days, which smeared the
+    middle of the distribution. With returns normalised by sqrt(days elapsed),
+    k=3 wins the silhouette outright (0.8009 against 0.7983 for k=2, run #80)
+    and no floor is needed. Every figure quoting this margin computes it from
+    the run it draws, because the fit moves — run #70 measured 0.8019/0.7984.
 
     If some future data does select k=2, the honest output is two zones, and the
     zone table will say so rather than a floor manufacturing a third.
@@ -366,7 +368,10 @@ def scale_within_commodity(fittable: pd.DataFrame) -> np.ndarray:
         spread = grouped.transform("std")
         centred = out[feature] - grouped.transform("mean")
         out[feature] = np.where(spread > 0, centred / spread, 0.0)
-    return out.to_numpy(dtype=float)
+    # Annotated because pandas ships no type information: `to_numpy` is typed as
+    # returning Any, and returning it bare would silently widen this signature.
+    scaled: np.ndarray = out.to_numpy(dtype=float)
+    return scaled
 
 
 def fit(

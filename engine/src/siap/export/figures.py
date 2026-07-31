@@ -24,7 +24,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import matplotlib
 
@@ -35,6 +35,12 @@ import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
 from ..db import Conn, fetch_all
+
+if TYPE_CHECKING:
+    # Type-only: `evaluate.ablation` imports the cluster stack, and this module
+    # is imported by it in turn. Annotating `k_silhouette` with `list[Any]` is
+    # what let a reference to a removed field survive both mypy and the tests.
+    from ..evaluate.ablation import KCurvePoint
 
 log = logging.getLogger(__name__)
 
@@ -114,8 +120,14 @@ class FigureSpec:
 
 
 # ---------------------------------------------------------------------------
-def k_silhouette(points: list[Any], run_id: int | None, directory: Path) -> FigureSpec:
-    """Silhouette and inertia against k, with the excluded k shown as excluded."""
+def k_silhouette(points: list[KCurvePoint], run_id: int | None, directory: Path) -> FigureSpec:
+    """Silhouette against k across the whole search range.
+
+    No k is marked ineligible. The three-zone floor that used to exclude k=2 was
+    removed in M10: once volatility is normalised for the days each return
+    spans, k is selected on its own silhouette. The whole curve is still drawn,
+    because the margin over the runner-up is thin and stating it is the point.
+    """
     _style()
     fig, ax = plt.subplots(figsize=(3.4, 2.2))
 
@@ -124,26 +136,6 @@ def k_silhouette(points: list[Any], run_id: int | None, directory: Path) -> Figu
     ax.plot(ks, sil, marker="o", markersize=3.5, color=INK, zorder=3)
 
     for point in points:
-        if not point.eligible:
-            # Hollow marker rather than a different colour: the distinction has
-            # to survive a monochrome print.
-            ax.plot(
-                point.k,
-                point.silhouette,
-                marker="o",
-                markersize=6,
-                markerfacecolor="white",
-                markeredgecolor=INK,
-                zorder=4,
-            )
-            ax.annotate(
-                "tidak memenuhi syarat\n(3 zona)",
-                (point.k, point.silhouette),
-                textcoords="offset points",
-                xytext=(6, -2),
-                fontsize=6,
-                color=MUTED,
-            )
         if point.selected:
             ax.plot(point.k, point.silhouette, marker="s", markersize=6, color=INK, zorder=5)
             ax.annotate(
@@ -159,11 +151,23 @@ def k_silhouette(points: list[Any], run_id: int | None, directory: Path) -> Figu
     ax.set_ylabel("silhouette")
     ax.set_xticks(ks)
     _stamp(fig, run_id)
+
+    # The margin is computed rather than written down, because it moves with the
+    # data and a caption that hardcodes it becomes false without anything failing.
+    selected = next((p for p in points if p.selected), None)
+    runner_up = max((p for p in points if not p.selected), key=lambda p: p.silhouette, default=None)
+    if selected is None or runner_up is None:
+        caption = "Silhouette against k across the whole search range."
+    else:
+        caption = (
+            f"Silhouette against k across the whole search range. k={selected.k} is selected "
+            f"on its own silhouette, ahead of k={runner_up.k} by "
+            f"{selected.silhouette - runner_up.silhouette:.4f}. The full curve is plotted "
+            f"rather than reduced to the winner, so the size of that margin is visible."
+        )
     return FigureSpec(
         "fig_k_silhouette",
-        "Silhouette against k. k=2 scores highest but cannot be selected, because two "
-        "clusters cannot populate a three-zone output; the point is plotted rather than "
-        "dropped so the cost of that constraint is visible.",
+        caption,
         _save(fig, "fig_k_silhouette", directory),
     )
 

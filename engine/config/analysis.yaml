@@ -156,8 +156,10 @@ kmeans:
   # feature did not divide log returns by the time they spanned, so regions
   # whose portals skip days measured as more volatile than regions that publish
   # daily, and that artefact smeared the middle of the distribution. With the
-  # returns normalised (see kmeans.build_cells) k=3 wins outright — 0.8019
-  # against 0.7984 for k=2 — and nothing needs forcing. The three zones come
+  # returns normalised (see kmeans.build_cells) k=3 wins outright — 0.8009
+  # against 0.7983 for k=2 on run #80 — and nothing needs forcing. The margin is
+  # cited with the run it came from because it moves: run #70 measured 0.8019
+  # against 0.7984, and n_init=50 below shifted the fit. The three zones come
   # from post-hoc centroid ranking at whatever k the silhouette selects.
   k_min: 2
   k_max: 8

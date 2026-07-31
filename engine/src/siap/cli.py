@@ -941,8 +941,11 @@ def cluster_cmd(within_commodity: bool) -> None:
         # A gated cell has no zone; it still prints, because the whole point of
         # keeping the row was that its exclusion stays visible.
         zone = str(r["zone"]) if r["zone"] else "-gated-"
-        colour = ZONE_COLOUR.get(zone)
-        badge = click.style(zone.upper().ljust(7), fg=colour)
+        # A gated row has no entry in ZONE_COLOUR, and no colour is the right
+        # answer for it — `.get` rather than `[]`, under its own name because
+        # `colour` above is bound to a plain str.
+        zone_colour = ZONE_COLOUR.get(zone)
+        badge = click.style(zone.upper().ljust(7), fg=zone_colour)
         vol = r["feat_volatility"]
         change = r["feat_cum_change"]
         click.echo(

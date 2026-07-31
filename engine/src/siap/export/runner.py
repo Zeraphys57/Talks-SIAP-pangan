@@ -84,7 +84,10 @@ def run(
     if ablation.k_points:
         report.figures.append(figures.k_silhouette(ablation.k_points, cluster_run_id, directory))
     else:
-        report.skipped.append("fig_k_silhouette: no monthly cells met min_days_in_month")
+        report.skipped.append(
+            "fig_k_silhouette: no monthly cell passed the provenance gate, so there was "
+            "nothing to fit a k curve on"
+        )
 
     if ablation.contamination_points:
         report.figures.append(
@@ -136,7 +139,6 @@ def run(
                         "k": p.k,
                         "silhouette": round(p.silhouette, 6),
                         "inertia": round(p.inertia, 4),
-                        "eligible": p.eligible,
                         "selected": p.selected,
                     }
                     for p in ablation.k_points
