@@ -6,6 +6,100 @@ reason, so they can be defended rather than discovered.
 
 ---
 
+## M10 — Two vocabularies, a provenance gate, and three measurements (2026-07-31)
+
+### The zone and the level stopped sharing words
+
+`cluster_assignments.zone` and `alerts.level` were both `merah/kuning/hijau`,
+and both render on the commodity page. They are different quantities — the zone
+is a monthly K-Means regime, the level a daily fusion score — and they disagree
+on **22.6% of 39,089 pairs**, including 272 cells where the zone reads `merah`
+while the level on the same screen reads `hijau`.
+
+The zone keeps the colour words: proposal Tujuan 3 commits in writing to K-Means
+producing "zona strategis (merah, kuning, hijau)". Fusion carries no such
+commitment, so fusion moved: `hijau → tenang`, `kuning → waspada`,
+`merah → siaga`. This also closes the last place design.md's "never encode
+meaning by colour alone" was satisfied on a technicality — the rule was met by
+printing a text label, but the label *was* a colour word.
+
+### A fourth state, on both
+
+`anomaly_term` ended in `max(scores) if scores else 0.0`, so a date neither
+detector could score produced A = 0.0 — indistinguishable from a date both
+examined and found calm — and rendered as "tidak ada yang tidak biasa".
+`alerts.level` gains `belum_dapat_dinilai`, outside the severity ordering, with
+`fusion_score` NULL and no recommendation. 348 rows change, all from `tenang`.
+
+**Correction to the diagnosis that prompted this:** the 41.31% (`nasional`) and
+13.66% (`di_yogyakarta`) figures are the *z-score* NULL rates, not this code
+path. Those dates still had an Isolation Forest score. The path fires where
+*neither* detector scored: 1.18% / 0.90% / 0.89% / 0.64%, and 100% of
+`kota_yogyakarta` — which was exact.
+
+### Provenance gate on cluster cells (migration 0011)
+
+Cells are excluded from the fit on **where their numbers came from**, never on
+the feature value: real observation count, distinct real values, share of
+observations inside a 7-day carry-forward run, and imputed share. A volatility
+threshold was rejected — it cannot separate a genuinely stable price from a
+stuck feed, so it would suppress real stable commodities to hide a data problem.
+
+Checked against the 36 zero-volatility cells: the gate catches **36 of 36**, all
+as `insufficient_distinct_values`. None were genuinely stable.
+
+Gated cells keep their row with `zone = NULL` and a `quality_reason`. This
+replaces `min_days_in_month`, which silently dropped thin months and made
+coverage unreportable. Coverage is now 1,485 / 1,692 (87.8%), and uneven:
+jawa_timur 97.3%, jawa_tengah 93.7%, di_yogyakarta 65.1%, kota_yogyakarta 0%.
+
+### Measurement 1 — volatility now divides by √(days elapsed)
+
+Excluding imputed rows made a Friday→Monday step a single 3-day return, whose
+variance is ~3× a 1-day return. Unnormalised, that inflated σ by ≈1.73× on those
+steps — and the steps cluster by region. jawa_timur's mean gap is exactly 1.000
+days (ratio 1.000, the control); di_yogyakarta's is 1.373 (ratio **1.228**). All
+regions enter one K-Means, so DIY looked ~23% more volatile than Jatim partly
+because of publication timing. 137 of 1,485 fitted cells (9.23%) move to a
+calmer zone, concentrated in DIY (19.72%) against Jatim (5.32%).
+
+### Measurement 2 — the k floor is removed
+
+Run #64's curve: **k=2 at 0.8037** against k=3 at 0.7224. The forcing was doing
+real damage. But removing the floor on the raw features selects k=2, which has
+no middle rank and makes `kuning` unreachable — breaking the same Tujuan 3
+commitment invoked above. Measurement 1 dissolves the conflict: with normalised
+returns **k=3 wins outright, 0.8019 against 0.7984**. The floor is gone and k is
+selected. If future data selects k=2, two zones is the honest output.
+
+### Measurement 3 — z-score window 30 → 45 calendar days
+
+`nasional` scored NULL on 41.31% of dates, **91.4% of them the observation floor**
+rather than a stale baseline, and flagged 5.74% against 7.86–9.43% elsewhere: it
+looked calm and was unmeasured. At 45 days, NULLs fall to 5.69% and flagging
+rises to 8.43%. jawa_timur moves 1.84% → 1.82% — the evidence this corrected an
+artefact rather than loosened a standard. **The 20-observation floor was not
+lowered.** Documented deviation; the M7 pool survives because the §7.1
+annotation criterion is independent of the detector.
+
+### Open, recorded rather than silently resolved
+
+**Zone ranking is not monotone in volatility.** `kuning` now holds the most
+violently moving months in the archive (0.13386 daily σ) while `merah` averages
+0.03691, because severity is `0.5·z(volatility) + 0.5·z(cum_change)` and the
+signed `cum_change` dominates. The dashboard renders those 21 cells as "tidak
+seliar kelompok merah", which is the opposite of true. The weights were never
+tuned. Whether severity should be composite at all is an open decision.
+
+**The headline silhouette is dominated by one cluster.** 0.8019 is a weighted
+mean in which 95.69% of cells sit in the cluster scoring 0.8235; the two
+alerting clusters score 0.3570 and 0.2546. Any quality claim must cite the
+composition table, not the single number.
+
+Re-run: analyze #70, cluster #71, fuse #72.
+
+---
+
 ## M9 — Reproducibility (2026-07-29)
 
 The determinism claim is now checked rather than asserted. `siap reproduce`
@@ -439,6 +533,13 @@ still scored and still appears in the recorded curve and the paper figure — it
 is excluded from *selection* only. "Do not force k=3" is read as "do not pin it
 at exactly 3"; k remains free to be 3 through 8. The write-up must state that
 k=2 scored highest and why it was excluded.
+
+> **Reversed at M10.** This floor no longer exists. The M4 analysis was correct
+> about the symptom and wrong about the cause: k=2 won because the volatility
+> feature did not divide log returns by the days they spanned, which inflated it
+> on regions whose portals skip days and smeared the middle of the distribution.
+> With that corrected, k=3 wins the silhouette outright and the floor is
+> unnecessary. See M10 below.
 
 With k=3 the clusters read cleanly, and the misclassified month becomes kuning:
 
