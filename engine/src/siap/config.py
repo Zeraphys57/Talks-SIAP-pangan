@@ -472,10 +472,6 @@ class CellQualityParams(_Strict):
 class KMeansParams(_Strict):
     k_min: int = Field(ge=2)
     k_max: int = Field(ge=2)
-    # Selection floor, distinct from the search range: k=2 is fitted and
-    # recorded for the paper figure but cannot be selected, because two clusters
-    # cannot populate a three-zone output.
-    k_select_min: int = Field(ge=2)
     n_init: int = Field(gt=0)
     max_iter: int = Field(gt=0)
     min_cells: int = Field(gt=0)
@@ -490,11 +486,6 @@ class KMeansParams(_Strict):
         # Silhouette is undefined for a single cluster and for k == n_samples.
         if self.k_min < 2:
             raise ValueError("k_min must be at least 2; silhouette is undefined for k=1")
-        if not self.k_min <= self.k_select_min <= self.k_max:
-            raise ValueError(
-                f"k_select_min ({self.k_select_min}) must lie within the search range "
-                f"[{self.k_min}, {self.k_max}]"
-            )
         return self
 
 

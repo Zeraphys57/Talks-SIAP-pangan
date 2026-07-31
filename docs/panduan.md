@@ -106,16 +106,37 @@ tidak boleh dijalankan di atas ingest yang gagal — lihat §5.
 
 **`siap analyze`** — dua metode berjalan berdampingan, bukan salah satu:
 
-- **Z-Score** — statistik, menandai harga yang jauh dari rata-rata 30 harinya
+- **Z-Score** — statistik, menandai harga yang jauh dari rata-rata 45 harinya
 - **Isolation Forest** — machine learning, menandai pola yang tidak biasa
 
 Keduanya dilaporkan terpisah supaya bisa dibandingkan di paper. Ada penjaga
 *stale-baseline*: kalau baseline-nya sudah kedaluwarsa, dia menolak, bukan
 menghitung dengan dasar usang.
 
+Jendelanya 45 hari, bukan 30. Syaratnya "minimal 20 pengamatan nyata", tapi
+jendelanya dihitung dalam hari kalender — dan keduanya hanya cocok kalau
+sumbernya terbit tiap hari. Di `nasional`, yang sekitar 27% harinya hasil
+imputasi, syarat itu gagal terpenuhi pada 41,31% tanggal. Akibatnya wilayah itu
+terlihat tenang padahal sebenarnya *tidak terukur*. Dengan 45 hari angkanya turun
+ke 5,69%. **Ambang 20 pengamatan tidak diturunkan** — yang dilebarkan hanya
+ruang untuk memenuhinya.
+
 **`siap cluster`** — K-Means pada tingkat komoditas × wilayah × bulan, mengelompokkan
-kondisi harga jadi rezim ("cenderung stabil", dst). Nilai k dipaksa minimal 3 supaya
-keluaran tiga zona yang dijanjikan brief benar-benar bisa tercapai.
+kondisi harga jadi rezim ("cenderung stabil", dst).
+
+Nilai k **tidak dipaksa**. Dulu ada lantai `k_select_min: 3`, karena silhouette
+lebih memilih k=2 dan dua klaster membuat zona kuning tak terjangkau. Lantai itu
+sudah dihapus: setelah volatilitas dinormalisasi terhadap jarak hari antar
+pengamatan nyata, k=3 menang sendiri (0,8019 lawan 0,7984 untuk k=2). Ternyata
+kemenangan k=2 sebagian besar adalah artefak pengukuran, bukan struktur data.
+Tiga zona sekarang lahir dari peringkat sentroid pada k mana pun yang terpilih.
+
+Ada juga **gerbang provenance**: sel bulanan yang datanya terlalu tipis, terlalu
+sedikit nilai berbedanya, atau didominasi nilai yang diulang-ulang, dikeluarkan
+dari pemodelan — tapi barisnya tetap disimpan dengan `zone = NULL` dan alasannya.
+Sengaja tidak dihapus, supaya cakupan tetap bisa dilaporkan. Saat ini 1.485 dari
+1.692 sel (87,8%) masuk pemodelan; `di_yogyakarta` hanya 65,1% karena sumbernya
+sering berhenti memperbarui angka.
 
 **`siap seasonal`** — dekomposisi STL, memunculkan minggu-minggu yang secara
 historis harganya di atas kebiasaan tahunan komoditas itu. Ada penjaga cakupan:

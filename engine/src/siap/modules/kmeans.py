@@ -201,10 +201,27 @@ def build_cells(frame: pd.DataFrame, params: KMeansParams) -> pd.DataFrame:
         # Log returns: a 10% move costs the same at any price level, so
         # volatility is comparable across commodities an order of magnitude
         # apart. Raw returns would make daging-sapi look calm by construction.
+        #
+        # Each return is then divided by sqrt(days elapsed). Imputed rows are
+        # excluded, so consecutive real observations are not consecutive days: a
+        # Friday->Monday step is one return covering three days, and the
+        # variance of a 3-day return is about 3x a 1-day return. Left raw, that
+        # inflates the standard deviation by ~1.73x on every such step — and the
+        # steps are not evenly distributed across regions. jawa_timur has none
+        # (mean gap exactly 1.000 days), di_yogyakarta has one most weeks (mean
+        # gap 1.373). All regions then enter ONE K-Means, so DIY was measured as
+        # 22.8% more volatile than jawa_timur partly as an artefact of when its
+        # portal publishes. Dividing by sqrt(dt) puts every return on a per-day
+        # footing before they are compared.
         volatility = cum_change = float("nan")
         if real_obs >= 3:
             log_returns = np.diff(np.log(prices))
-            volatility = float(np.std(log_returns, ddof=1))
+            elapsed = np.diff(real_rows["obs_date"].to_numpy()).astype("timedelta64[D]")
+            elapsed = elapsed.astype(float)
+            # Same-day duplicates cannot occur in price_daily_unified, but a
+            # zero here would divide by zero rather than fail loudly.
+            elapsed[elapsed <= 0] = 1.0
+            volatility = float(np.std(log_returns / np.sqrt(elapsed), ddof=1))
             cum_change = float((prices[-1] - prices[0]) / prices[0])
 
         rows.append(
@@ -242,12 +259,16 @@ def search_k(scaled: np.ndarray, params: KMeansParams, seed: int) -> tuple[list[
     figure, and keeping only the selected k would make it unreproducible without
     a re-run.
 
-    **Selection is floored at `k_select_min`, and the curve is not.** On the real
-    data the silhouette prefers k=2, because isolating the ~4% of extreme cells
-    is trivially separable. But the zone rule ranks clusters and takes the
-    extremes, so two clusters leave `kuning` unreachable and a month with 5%
-    daily volatility and a +25% rise lands in the calm cluster. k=2 is therefore
-    still fitted, still scored and still reported — it just cannot win.
+    **k is selected, not forced.** There was a `k_select_min = 3` floor here,
+    because on the raw features the silhouette preferred k=2 (0.7896 against
+    0.7057 for k=3) and two clusters leave `kuning` unreachable. That floor was
+    removed once measurement 1 showed *why* k=2 won: the volatility feature was
+    inflated on regions whose portals skip days, which smeared the middle of the
+    distribution. With returns normalised by sqrt(days elapsed), k=3 wins the
+    silhouette outright (0.8019 against 0.7984 for k=2) and no floor is needed.
+
+    If some future data does select k=2, the honest output is two zones, and the
+    zone table will say so rather than a floor manufacturing a third.
     """
     entries: list[KSearchEntry] = []
     # Silhouette needs at least k+1 samples and at least 2 clusters.
@@ -271,14 +292,7 @@ def search_k(scaled: np.ndarray, params: KMeansParams, seed: int) -> tuple[list[
     if not entries:
         raise ValueError("no k in the configured range produced more than one cluster")
 
-    selectable = [e for e in entries if e.k >= params.k_select_min]
-    if not selectable:
-        raise ValueError(
-            f"no k >= k_select_min ({params.k_select_min}) was fittable; "
-            f"only {[e.k for e in entries]} produced more than one cluster"
-        )
-
-    best = max(selectable, key=lambda e: e.silhouette)
+    best = max(entries, key=lambda e: e.silhouette)
     return entries, best.k
 
 

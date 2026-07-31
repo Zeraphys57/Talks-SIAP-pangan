@@ -66,21 +66,20 @@ class KCurvePoint:
     inertia: float
     silhouette: float
     selected: bool
-    eligible: bool
 
 
 def k_curve(conn: Conn, cfg: AnalysisConfig) -> list[KCurvePoint]:
-    """Silhouette across the whole k range, including the k that cannot be chosen.
+    """Silhouette across the whole k range.
 
-    k=2 is fitted and reported even though `k_select_min` forbids selecting it.
-    Hiding the point that scores best would be the kind of omission that makes a
-    figure an argument rather than a measurement — and the reason k=2 is
-    excluded is editorial (two clusters cannot fill a three-zone output), not
-    statistical, so the reader is entitled to see the cost.
+    Every k in the range is fitted, scored and reported. There is no longer a
+    selection floor to explain: k=3 wins on its own silhouette once the
+    volatility feature is normalised for the days each return spans. The full
+    curve stays in the figure because a reader is entitled to see how close the
+    runner-up was — on run #70 that margin is 0.0035.
     """
     from ..cluster import load_cells
 
-    daily = load_cells(conn, cfg)
+    daily = load_cells(conn)
     cells = kmeans.build_cells(daily, cfg.kmeans)
     if cells.empty:
         return []
@@ -92,7 +91,6 @@ def k_curve(conn: Conn, cfg: AnalysisConfig) -> list[KCurvePoint]:
             inertia=entry.inertia,
             silhouette=entry.silhouette,
             selected=entry.k == model.k_selected,
-            eligible=entry.k >= cfg.kmeans.k_select_min,
         )
         for entry in model.k_search
     ]

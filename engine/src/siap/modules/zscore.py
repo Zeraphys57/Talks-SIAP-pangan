@@ -1,6 +1,6 @@
 """Z-Score anomaly detection — the statistical baseline (§6.1).
 
-    z_t = (log p_t - mean(log p_{t-30..t-1})) / std(log p_{t-30..t-1})
+    z_t = (log p_t - mean(log p_{t-45..t-1})) / std(log p_{t-45..t-1})
 
 Three properties matter, and each is a deliberate answer to a way this can go
 wrong:
@@ -13,8 +13,16 @@ events it exists to find.
 
 **The window is measured in calendar days, not rows.** Imputed rows are dropped
 before scoring, so consecutive rows are not consecutive days. A row-count window
-of 30 would silently span six weeks in a sparse region. A `30D` time window with
-a minimum-observation floor keeps the baseline anchored to real time.
+of 30 would silently span six weeks in a sparse region. A calendar window with a
+minimum-observation floor keeps the baseline anchored to real time.
+
+That pairing has a cost, and the width is set to pay it. The floor is stated in
+observations and the window in days, so where a source publishes intermittently
+the two disagree and the floor simply fails to be met. At a 30-day window,
+41.31% of `nasional` dates went unscored and 91.4% of those were the floor, not
+a stale baseline — its flag rate read 5.74% against 7.86-9.43% elsewhere, which
+looked like a calm region and was actually an unmeasured one. The window is now
+45 days so the floor has room to be met; the floor itself is unchanged.
 
 **It runs on log price.** The proposal itself names the normality assumption as
 Z-Score's weakness. Prices are right-skewed and move multiplicatively — a 10%

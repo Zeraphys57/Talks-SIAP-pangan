@@ -128,7 +128,7 @@ an unseeded RNG — and a tolerance would hide precisely the bug this exists to
 find.
 
 NaN is normalised to NULL before comparison, because that is what the persister
-writes: a score inside the 30-day warm-up window is not a number. Without that
+writes: a score inside the 45-day warm-up window is not a number. Without that
 normalisation every warm-up row would appear to mismatch *itself*, since NaN
 never compares equal to NaN.
 

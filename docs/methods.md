@@ -85,7 +85,7 @@ agree — the fusion step in §4 exists because they do not.
 
 ### 2.1 Z-Score (`analysis.zscore`)
 
-Rolling 30-day window, minimum 20 observations, threshold |z| ≥ 2.5, computed on
+Rolling 45-day window, minimum 20 observations, threshold |z| ≥ 2.5, computed on
 **log** price. Prices are right-skewed and multiplicative: a 10% move costs the
 same whether the price is 15,000 or 60,000, and only log space treats it that
 way.
@@ -93,6 +93,56 @@ way.
 `min_baseline_std = 0.0005` (0.05% daily σ in log space). Without it, a stale
 series with σ ≈ 1e-16 produced z = −20,824,185 — an artefact of a price that had
 not moved for a month, not a finding. Such windows now score NULL.
+
+**Why the window is 45 days and not 30.** The floor is stated in *observations*
+and the window in *calendar days*. Those agree only where a source publishes
+daily, and `nasional` runs at ~27% systematic imputation, which put it right on
+the floor. At 30 days it scored NULL on **41.31%** of its dates, and **91.4%** of
+those NULLs were the observation floor rather than a stale baseline. Its flag
+rate read 5.74% against 7.86–9.43% everywhere else — which looks like a calm
+region and is actually an unmeasured one.
+
+Widening the lookback to 45 days, **without lowering the floor below 20**:
+
+| region | NULL % 30D | NULL % 45D | Δ | flag % 30D | flag % 45D | Δ |
+|---|---|---|---|---|---|---|
+| nasional | 41.31 | 5.69 | **−35.63** | 5.74 | 8.43 | +2.68 |
+| di_yogyakarta | 13.66 | 9.55 | −4.11 | 8.08 | 8.06 | −0.02 |
+| jawa_tengah | 4.70 | 3.71 | −0.99 | 9.43 | 8.82 | −0.61 |
+| jawa_timur | 1.84 | 1.82 | −0.02 | 7.86 | 8.02 | +0.16 |
+| kota_yogyakarta | 100.00 | 100.00 | 0.00 | 0.00 | 0.00 | 0.00 |
+
+jawa_timur, which publishes daily, is essentially unmoved — the change reaches
+only the regions the calendar window was penalising, which is the evidence that
+it corrected a measurement artefact rather than loosened a standard. `nasional`'s
+flag rate now sits inside the range of the other regions.
+
+This does **not** invalidate the M7 candidate pool: the §7.1 annotation
+criterion is deliberately independent of the detector. It is a documented
+deviation from the original protocol and required a full re-run.
+
+### 2.3 Detector coverage per region, decomposed by cause
+
+Coverage is a reported metric, not a footnote — a detector that cannot score a
+date is not a detector that found nothing. At the 45-day window (run #70):
+
+| region | z-score NULL % | of which floor | of which stale baseline | iforest NULL % |
+|---|---|---|---|---|
+| jawa_timur | 1.82 | 1.73 | 0.00 | 0.64 |
+| jawa_tengah | 3.71 | 2.41 | 1.18 | 0.89 |
+| nasional | 5.69 | 3.20 | 2.32 | 1.18 |
+| di_yogyakarta | 9.55 | 2.43 | 6.99 | 0.90 |
+| kota_yogyakarta | 100.00 | 0.00 | 0.00 | 100.00 |
+
+The two causes are different failures and must not be pooled.
+`min_observations` is *our* window being too narrow for the source's cadence —
+fixable, and fixed above. `min_baseline_std` is the *source* having stopped
+publishing new values — not fixable by us, and the same defect the clustering
+provenance gate catches at monthly resolution. di_yogyakarta is now dominated by
+the second, which is the honest residual.
+
+`kota_yogyakarta` has one day of data in the entire archive; it scores nothing,
+clusters nothing, and every one of its alerts is `belum_dapat_dinilai`.
 
 **Known limitation, deliberately not fixed.** The brief defines an anomaly as a
 change exceeding ±10% against the trailing 30-day mean sustained two days, but
@@ -130,24 +180,117 @@ which days rank as unusual.
 
 ## 3. Clustering (`analysis.kmeans`)
 
-Monthly cells per commodity × region, minimum 15 days in a month, two features:
-volatility and cumulative change, standardised. k searched over 2…8, selected by
-silhouette.
+Monthly cells per commodity × region, two features — volatility and cumulative
+change — standardised. k searched over 2…8, selected by silhouette. Cells that
+fail the provenance gate keep their row and are excluded from the fit.
 
-**Why k is not forced to 3.** The proposal asks for "optimal k" *and* for three
-zones. Silhouette selects k; the three zones are then a presentation layer, with
-middle clusters merging into `kuning` when k > 3. Forcing k = 3 would report a
-model-selection result that was never a selection.
+### 3.1 The provenance gate
 
-**Why k = 2 cannot be selected.** k = 2 scores highest on silhouette (0.7844
-against 0.6486 for k = 3), but two clusters cannot populate a three-zone output
-— `kuning` would be unreachable and the middle level would never appear. So
-`k_select_min = 3` floors the choice. The constraint is editorial rather than
-statistical, so `fig_k_silhouette` plots k = 2 rather than dropping it: the
-reader is entitled to see what the constraint cost.
+A cell is excluded when it has fewer than 15 real observations, fewer than 3
+distinct real values, or at least half its real observations inside a run of 7
+or more identical consecutive values. Every criterion is a statement about the
+**data**, never about the feature value.
 
-Zones are assigned by ranking centroids on `0.5 × volatility + 0.5 ×
-cum_change`. Zones describe how a price **has behaved**, not where it will go.
+That distinction is the whole point. A volatility threshold would be one line
+and is indefensible: it cannot tell a genuinely stable price from a portal that
+stopped resurveying, so it would suppress real stable commodities to hide a data
+problem. Checked against the 36 cells whose measured volatility was exactly
+zero, the provenance gate catches **36 of 36**, all as
+`insufficient_distinct_values`. None passed, so no genuinely stable commodity
+was being suppressed — every zero-volatility cell in the archive was a feed that
+had stopped moving.
+
+Gated cells are kept, not deleted, so coverage is reportable. It is uneven:
+
+| region | fitted | thin | flat | stale | coverage |
+|---|---|---|---|---|---|
+| jawa_timur | 432 / 444 | 12 | 0 | 0 | 97.3% |
+| jawa_tengah | 416 / 444 | 12 | 6 | 10 | 93.7% |
+| di_yogyakarta | 289 / 444 | 12 | 73 | 70 | 65.1% |
+| nasional | 348 / 348 | 0 | 0 | 0 | 100% |
+| kota_yogyakarta | 0 / 12 | 12 | 0 | 0 | 0% |
+
+**1,485 of 1,692 cells (87.8%) enter the fit.** The DIY column is the M2
+stale-feed finding restated: it is the region PIHPS was the sole source for.
+
+### 3.2 Volatility is normalised for the days each return spans
+
+Imputed rows are excluded from the features, so consecutive real observations
+are not consecutive days: a Friday→Monday step is one log return covering three
+days. The variance of a 3-day return is about 3× that of a 1-day return, so an
+unnormalised standard deviation inflates by ≈1.73× on every such step — and the
+steps are not spread evenly across regions:
+
+| region | mean gap (days) | volatility raw | ÷√Δt | ratio |
+|---|---|---|---|---|
+| jawa_timur | 1.000 | 0.00936 | 0.00936 | 1.000 |
+| jawa_tengah | 1.364 | 0.01229 | 0.01031 | 1.191 |
+| nasional | 1.438 | 0.01314 | 0.01149 | 1.144 |
+| di_yogyakarta | 1.373 | 0.02149 | 0.01749 | **1.228** |
+
+All regions then enter **one** K-Means, so di_yogyakarta was measured as ~23%
+more volatile than jawa_timur partly because of when its portal publishes.
+Dividing each log return by √(days elapsed) removes it. jawa_timur, which
+publishes daily, is unmoved by construction — a useful control.
+
+Correcting this moved **137 of 1,485 fitted cells (9.23%)** to a calmer zone
+(129 `kuning`→`hijau`, 4 `merah`→`hijau`, 4 `merah`→`kuning`), and the effect is
+concentrated exactly where predicted: di_yogyakarta 19.72% of its cells, against
+jawa_timur's 5.32%.
+
+### 3.3 k is selected, not forced
+
+There was a `k_select_min = 3` floor, because on the raw features the silhouette
+preferred k = 2 (**0.7896** against 0.7057 for k = 3 on run #68) and two clusters
+leave `kuning` unreachable.
+
+The floor is gone. Once the volatility feature is normalised for elapsed time,
+**k = 3 wins the silhouette outright: 0.8019 against 0.7984 for k = 2.** The
+earlier preference for k = 2 was substantially an artefact of the inflated
+feature smearing the middle of the distribution. Nothing needs forcing, and the
+three zones now come from post-hoc centroid ranking at whatever k the silhouette
+selects. If future data selects k = 2, the honest output is two zones.
+
+The margin is thin — 0.0035 — so `fig_k_silhouette` plots the whole curve.
+
+### 3.4 The headline silhouette is dominated by one cluster
+
+**0.8019 is a weighted mean, and reporting it alone is misleading.** 95.69% of
+fitted cells sit in the one cluster that scores well; the two clusters that
+actually raise anything score far worse:
+
+| cluster | zone | cells | share | silhouette | mean volatility | mean cum_change |
+|---|---|---|---|---|---|---|
+| 0 | `hijau` | 1,421 | 95.69% | **0.8235** | 0.00914 | −1.03% |
+| 1 | `merah` | 43 | 2.90% | **0.3570** | 0.03691 | +86.64% |
+| 2 | `kuning` | 21 | 1.41% | **0.2546** | 0.13386 | +9.99% |
+
+The bare number is technically true and substantively misleading: it says the
+calm cluster is well separated from everything else, which was never in doubt.
+The alerting clusters — the ones the system exists to produce — are weakly
+separated. Any claim about clustering quality must cite this table, not 0.8019.
+
+### 3.5 Zone ranking is not monotone in volatility, and that needs saying
+
+`merah` has **lower** mean volatility than `kuning` (0.03691 against 0.13386).
+Unexplained, that table reads as a bug. It is not: zones rank centroids on
+
+    severity = 0.5 · z(volatility) + 0.5 · z(cum_change)
+
+so a cluster with moderate volatility and a +86.64% cumulative rise outranks one
+with very high volatility and a +9.99% rise. `cum_change` is signed and, on this
+data, has by far the wider spread, so it dominates the composite.
+
+**This is a live design problem, not merely a documentation one.** The `kuning`
+cluster holds the most violently moving months in the archive — 13.4% daily
+log-return σ — under a label the dashboard renders as "Cukup bergerak … tidak
+seliar kelompok merah", which is the opposite of true for those 21 cells. The
+ranking weights are in `analysis.yaml` and were not tuned; whether severity
+should be composite at all, or whether volatility should rank alone with
+`cum_change` shown separately, is an open decision recorded here rather than
+silently resolved.
+
+Zones describe how a price **has behaved**, not where it will go.
 
 ---
 
@@ -179,6 +322,37 @@ colour words because proposal Tujuan 3 commits in writing to K-Means producing
 fusion moved to an escalation vocabulary: `hijau → tenang`, `kuning → waspada`,
 `merah → siaga`. This also gives the dashboard's primary signal names that carry
 meaning without colour, which is what `docs/design.md` asks for.
+
+**The fourth level: `belum_dapat_dinilai`.** `A` was computed as
+`max(scores) if scores else 0.0`. A date neither detector could score therefore
+produced A = 0.0 — the same value as a date both detectors examined and found
+calm — and fell through to the lowest band, where the dashboard rendered it as
+"tidak ada yang tidak biasa pada harga hari itu". Absence of evidence, presented
+as evidence of safety.
+
+`A` is now undefined rather than zero when neither detector scored, the level
+propagates to `belum_dapat_dinilai`, and `fusion_score` is NULL. The level sits
+**outside** the `tenang < waspada < siaga` ordering: it is not a severity, it is
+the absence of a judgement, and it carries no recommendation. On the re-run
+(#72 against #66) exactly 348 rows change level, all from `tenang`, and nothing
+else moves.
+
+Per region, as a share of that region's alerts: `nasional` 1.18%,
+`jawa_tengah` 0.89%, `di_yogyakarta` 0.90%, `jawa_timur` 0.64%, and
+`kota_yogyakarta` **100%**.
+
+> A correction worth recording, because it shaped the original diagnosis. The
+> figures of 41.31% (`nasional`) and 13.66% (`di_yogyakarta`) are the **z-score**
+> NULL rates at the 30-day window, not the rate at which this code path fired.
+> Those dates still had an Isolation Forest score, so `A` came from one detector
+> rather than none and the row was scored on real evidence. The path that
+> returned 0.0 for genuine absence fires only where *neither* detector scored,
+> which is the much smaller set above. `kota_yogyakarta`'s 100% was exact.
+
+M, D and C are still recorded on an unscored row — they are what *was*
+observable, and the audit trail should show it. A large weekly move on a date no
+detector could score is still an unscored date: letting M carry the row would
+produce a level from a quarter of the model and present it as the whole.
 
 **The demand weight is currently inert, not robust.** Perturbing it gives
 Spearman exactly 1.0000 — because Trends is throttled, D = 0 on every scored day,

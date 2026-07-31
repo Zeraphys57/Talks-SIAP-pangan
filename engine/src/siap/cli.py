@@ -1178,7 +1178,7 @@ def ablate_cmd() -> None:
     click.echo("=" * 84)
     click.echo(f"  {'k':>3}  {'silhouette':>11}  {'inertia':>12}  note")
     for point in report.k_points:
-        note = "SELECTED" if point.selected else ("" if point.eligible else "below k_select_min")
+        note = "SELECTED" if point.selected else ""
         click.echo(f"  {point.k:>3}  {point.silhouette:>11.4f}  {point.inertia:>12.2f}  {note}")
 
     click.echo()

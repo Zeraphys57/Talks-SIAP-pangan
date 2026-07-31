@@ -265,32 +265,40 @@ def test_fit_records_the_whole_k_search_not_just_the_winner() -> None:
     assert all(e.inertia > 0 for e in model.k_search)
 
 
-def test_fit_selects_the_best_k_at_or_above_the_selection_floor() -> None:
-    cfg = load_analysis()
-    model = kmeans.fit(_mixed_cells(), cfg.kmeans, cfg.seed)
-    eligible = [e for e in model.k_search if e.k >= cfg.kmeans.k_select_min]
-    assert model.k_selected == max(eligible, key=lambda e: e.silhouette).k
-    assert model.k_selected >= cfg.kmeans.k_select_min
+def test_k_is_whichever_scores_best_with_no_floor() -> None:
+    """Selection is the silhouette's, not a floor's.
 
-
-def test_k_below_the_selection_floor_is_scored_but_cannot_win() -> None:
-    """k=2 stays in the recorded curve for the paper, but is never selected.
-
-    On the real data k=2 has the highest silhouette by a wide margin, and would
-    leave `kuning` unreachable. Decision taken at the M4 gate; see analysis.yaml.
+    The `k_select_min = 3` floor was removed once measurement 1 showed that k=2
+    only won because the volatility feature was inflated on regions whose portals
+    skip days. With returns normalised for elapsed time, k=3 wins on merit.
     """
     cfg = load_analysis()
     model = kmeans.fit(_mixed_cells(), cfg.kmeans, cfg.seed)
-    recorded = {e.k for e in model.k_search}
-    assert cfg.kmeans.k_min in recorded, "k below the floor vanished from the curve"
-    assert model.k_selected >= cfg.kmeans.k_select_min
+    assert model.k_selected == max(model.k_search, key=lambda e: e.silhouette).k
 
 
-def test_the_selected_k_can_always_populate_three_zones() -> None:
-    """The floor exists so the specified three-zone output is reachable."""
+def test_every_k_in_the_range_stays_in_the_recorded_curve() -> None:
+    """The elbow curve is a required paper figure; nothing is dropped from it."""
     cfg = load_analysis()
     model = kmeans.fit(_mixed_cells(), cfg.kmeans, cfg.seed)
-    assert set(model.zone_mapping.values()) == {"merah", "kuning", "hijau"}
+    recorded = {e.k for e in model.k_search}
+    assert recorded == set(range(cfg.kmeans.k_min, cfg.kmeans.k_max + 1))
+
+
+def test_no_floor_manufactures_a_zone_the_data_does_not_support() -> None:
+    """Two planted regimes select k=2, and k=2 honestly yields two zones.
+
+    This is the behaviour the removed `k_select_min` floor was hiding. On data
+    that genuinely contains two regimes, forcing k=3 would have split one of
+    them and reported the split as a `kuning` regime. The zone count now follows
+    the selected k rather than the other way round; on the real data, where the
+    normalised features select k=3, all three zones appear.
+    """
+    cfg = load_analysis()
+    model = kmeans.fit(_mixed_cells(), cfg.kmeans, cfg.seed)
+    assert model.k_selected == 2
+    assert set(model.zone_mapping.values()) == {"merah", "hijau"}
+    assert len(set(model.zone_mapping.values())) == model.k_selected
 
 
 def test_fit_separates_the_two_planted_regimes() -> None:

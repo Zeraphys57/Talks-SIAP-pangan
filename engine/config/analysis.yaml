@@ -33,13 +33,33 @@ input:
 # 6.1 Z-Score — statistical baseline
 # ---------------------------------------------------------------------------
 zscore:
-  # Trailing window: days t-30 .. t-1. Day t is NOT in its own baseline —
+  # Trailing window: days t-45 .. t-1. Day t is NOT in its own baseline —
   # including it would let a spike partly cancel itself, which is the exact
   # leak that makes a naive rolling z-score under-detect.
-  window_days: 30
+  #
+  # Widened from 30 to 45 calendar days. The requirement below is stated in
+  # *observations* while the window is stated in *calendar days*, and the two
+  # only agree where a source publishes daily. nasional runs at ~27% systematic
+  # imputation, which put it right on the floor: 41.31% of its dates scored
+  # NULL, and 91.4% of those NULLs were min_observations rather than a stale
+  # baseline. Its flag rate was correspondingly depressed — 5.74% against
+  # 7.86-9.43% everywhere else — not because nasional is calmer, but because
+  # two dates in five could not be judged.
+  #
+  # At 45 days: nasional NULLs fall to 5.69% and its flag rate rises to 8.43%,
+  # in line with the other regions. di_yogyakarta falls from 13.66% to 9.55%.
+  # jawa_timur, which publishes daily, is unmoved (1.84% -> 1.82%) — the change
+  # only reaches the regions the calendar window was penalising.
+  #
+  # This does not invalidate the M7 candidate pool: the annotation criterion in
+  # §7.1 is deliberately independent of the detector. It is a documented
+  # deviation from the original protocol and required a full re-run.
+  window_days: 45
 
   # Below this many real observations in the window, emit NULL rather than a
-  # number computed from too little history.
+  # number computed from too little history. Deliberately NOT lowered when the
+  # window widened — the point was to give the floor 45 days to be met in, not
+  # to accept a thinner baseline.
   min_observations: 20
 
   # |z| at or above this is flagged. The proposal notes Z-Score's normality
@@ -126,26 +146,21 @@ kmeans:
 
   # The full search is recorded, not just the winner: the elbow/silhouette curve
   # is a required paper figure and storing only k would make it unreproducible.
+  #
+  # There is no selection floor. There used to be (`k_select_min: 3`), because
+  # on the raw features the silhouette preferred k=2 — 0.7896 against 0.7057 for
+  # k=3 on run #68 — and two clusters leave `kuning` unreachable, since the zone
+  # rule ranks centroids and takes the extremes.
+  #
+  # The floor was removed once the cause of k=2's win was found. The volatility
+  # feature did not divide log returns by the time they spanned, so regions
+  # whose portals skip days measured as more volatile than regions that publish
+  # daily, and that artefact smeared the middle of the distribution. With the
+  # returns normalised (see kmeans.build_cells) k=3 wins outright — 0.8019
+  # against 0.7984 for k=2 — and nothing needs forcing. The three zones come
+  # from post-hoc centroid ranking at whatever k the silhouette selects.
   k_min: 2
   k_max: 8
-
-  # Selection floor, distinct from the search range.
-  #
-  # On the real data the silhouette prefers k=2 (0.7807 against 0.6504 for k=3),
-  # because isolating the ~4% of extreme cells is trivially separable. But the
-  # zone rule ranks clusters and takes the extremes, so k=2 has no middle rank
-  # and `kuning` becomes unreachable — and worse, a month with 5% daily
-  # volatility and a +25% rise falls into the calm cluster and reads hijau. For
-  # a warung owner that is exactly backwards.
-  #
-  # "Do not force k=3" is read as "do not pin it at exactly 3": k is still free
-  # to be 3, 4, 5, 6, 7 or 8, chosen by silhouette. It is not free to be 2,
-  # because 2 cannot populate the three-zone output the same section specifies.
-  #
-  # k=2 is still fitted and still appears in the recorded curve and the paper
-  # figure; it is excluded from *selection* only, and the write-up states that
-  # it scored highest and why it was excluded. Decision taken at the M4 gate.
-  k_select_min: 3
 
   n_init: 10
   max_iter: 300
