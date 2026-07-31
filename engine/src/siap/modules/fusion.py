@@ -90,8 +90,9 @@ def anomaly_term(inp: FusionInput, cfg: FusionConfig) -> tuple[float | None, boo
     same as returning 0.0. A = 0 says "both detectors looked and found nothing
     unusual". A = None says "neither detector could look at all" — the z-score
     had too little history in the window, or its baseline was too stale to
-    divide by. Collapsing the second into the first is how absence of evidence
-    became evidence of safety on 41.31% of `nasional` dates.
+    divide by. Collapsing the second into the first rendered absence of evidence
+    as evidence of safety: measured on run #72, it fires on 100% of
+    `kota_yogyakarta` alerts and 0.64-1.18% elsewhere.
 
     The bonus is small because agreement is rare: M3 measured the two detectors
     overlapping on only 9.7% of flags, which is exactly why agreement is worth

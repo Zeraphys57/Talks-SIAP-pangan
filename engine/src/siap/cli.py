@@ -775,10 +775,77 @@ def analyze_cmd(top: int) -> None:
             click.echo(f"      {s.region}/{s.commodity}: {s.skipped}")
 
 
+def _echo_within_commodity(pair: tuple[Any, Any]) -> None:
+    """Print the two models side by side — the point is the comparison."""
+    glob, within = pair
+
+    click.echo("=" * 96)
+    click.echo("SECONDARY ANALYSIS — FEATURES STANDARDISED WITHIN EACH COMMODITY")
+    click.echo("=" * 96)
+    click.echo(
+        "  The global model answers 'which commodity-months are extreme against the whole\n"
+        "  population'. This one removes the between-commodity level first, so what is left\n"
+        "  is temporal: 'is this commodity unusual FOR ITSELF this month'.\n"
+        "  Centroid units differ between the two and are NOT comparable.\n"
+    )
+    click.echo(f"  {'':<20}{'global':>12}{'within-commodity':>20}")
+    click.echo(f"  {'k selected':<20}{glob.k_selected:>12}{within.k_selected:>20}")
+    click.echo(f"  {'silhouette':<20}{glob.silhouette_avg:>12.4f}{within.silhouette_avg:>20.4f}")
+    click.echo(f"  {'cells fitted':<20}{glob.n_samples:>12,}{within.n_samples:>20,}")
+
+    for label, model in (("GLOBAL", glob), ("WITHIN-COMMODITY", within)):
+        click.echo()
+        click.echo(f"  {label} — commodity composition of each zone")
+        assigned = model.assignments[model.assignments["zone"].notna()]
+        for zone in ("merah", "kuning", "hijau"):
+            sub = assigned[assigned["zone"] == zone]
+            if sub.empty:
+                continue
+            top = sub["commodity"].value_counts().head(4)
+            spread = ", ".join(f"{c} {100 * n / len(sub):.0f}%" for c, n in top.items())
+            click.echo(
+                f"    {zone:<7}{len(sub):>6} cells  "
+                f"{sub['commodity'].nunique():>2}/12 commodities   {spread}"
+            )
+
+    click.echo()
+    click.echo("  zone stability (share of consecutive month pairs that change zone)")
+    for label, model in (("global", glob), ("within-commodity", within)):
+        assigned = model.assignments[model.assignments["zone"].notna()]
+        seq = assigned.sort_values(["commodity", "region", "period_month"]).copy()
+        seq["prev"] = seq.groupby(["commodity", "region"])["zone"].shift()
+        trans = seq.dropna(subset=["prev"])
+        if trans.empty:
+            continue
+        flips = int((trans["zone"] != trans["prev"]).sum())
+        click.echo(
+            f"    {label:<20}{flips:>6} of {len(trans):>6}  ({100 * flips / len(trans):5.2f}%)"
+        )
+
+
 @cli.command("cluster")
-def cluster_cmd() -> None:
+@click.option(
+    "--within-commodity",
+    is_flag=True,
+    help="Report the secondary variant (features standardised inside each commodity). "
+    "Reports only; the persisted model is always the global one.",
+)
+def cluster_cmd(within_commodity: bool) -> None:
     """Fit the regime clustering — the M4 gate output."""
-    from .cluster import run_clustering, zone_counts_by_commodity, zone_table
+    from .cluster import (
+        report_within_commodity,
+        run_clustering,
+        zone_counts_by_commodity,
+        zone_table,
+    )
+
+    if within_commodity:
+        try:
+            with connect() as conn:
+                _echo_within_commodity(report_within_commodity(conn))
+        except (MissingSetting, DatabaseError, ConfigError, ValueError) as exc:
+            _fatal(str(exc))
+        return
 
     try:
         with connect() as conn:

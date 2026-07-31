@@ -96,6 +96,9 @@ class ClusterModel:
     n_samples: int
     n_gated: int = 0
     gate_reasons: dict[str, int] = field(default_factory=dict)
+    #: "global" (primary, persisted) or "within_commodity" (secondary, reported).
+    #: Centroid units differ between the two and are not comparable.
+    variant: str = "global"
     assignments: pd.DataFrame = field(default_factory=pd.DataFrame)
 
     @property
@@ -299,16 +302,26 @@ def search_k(scaled: np.ndarray, params: KMeansParams, seed: int) -> tuple[list[
 def assign_zones(centroids: np.ndarray, params: KMeansParams) -> dict[int, str]:
     """Map cluster ids to zones, post hoc, by ranking centroid severity.
 
-    Score = w_v * z(volatility) + w_c * z(cum_change), on the *standardised*
-    centroid coordinates. Highest -> merah, lowest -> hijau, everything between
-    -> kuning. With k > 3 the middle clusters merge, deliberately.
+    Score = w_v * z(volatility) + w_c * z(max(0, cum_change)), on the
+    *standardised* centroid coordinates. Highest -> merah, lowest -> hijau,
+    everything between -> kuning. With k > 3 the middle clusters merge,
+    deliberately.
 
-    Note the sign convention: `cum_change` is signed, so a month that fell
-    sharply scores *low* and lands in hijau. That is the intended reading — the
-    zones answer "should I buy now?", and a collapsing price is not a warning.
+    **Only upward cumulative movement contributes.** The reader is a buyer: a
+    month whose price fell is not a risk to them, so a falling cluster should
+    not be pushed *down* the ranking by how far it fell — it should be ranked on
+    its volatility alone, like a flat one. Clamping at zero does that.
+
+    `abs(cum_change)` would be the wrong fix: it would rank a price collapse as
+    `merah`, telling a warung owner to worry about the one movement that is in
+    their favour.
+
+    Volatility contributes in full and unsigned, because unpredictability blocks
+    planning in both directions — a price that swings wildly is hard to buy
+    against whichever way it ends the month.
     """
     volatility = centroids[:, 0]
-    cum_change = centroids[:, 1]
+    cum_change = np.maximum(0.0, centroids[:, 1])
 
     def z(values: np.ndarray) -> np.ndarray:
         spread = values.std()
@@ -332,12 +345,47 @@ def assign_zones(centroids: np.ndarray, params: KMeansParams) -> dict[int, str]:
     return mapping
 
 
-def fit(cells: pd.DataFrame, params: KMeansParams, seed: int) -> ClusterModel:
+def scale_within_commodity(fittable: pd.DataFrame) -> np.ndarray:
+    """Standardise each feature *within* its commodity.
+
+    The secondary analysis. The global fit answers "which commodity-months are
+    extreme against the whole population", and measurably answers it by
+    recovering commodity identity: `merah` is 100% cabai and bawang-merah, and
+    eight of twelve commodities never leave one zone. That is a defensible
+    answer to Tujuan 3, which asks for commodities grouped by volatility — but
+    it is not a claim about *periods*, which is what the dashboard says it is.
+
+    Normalising within commodity removes the between-commodity level so the
+    remaining structure is temporal: "is cabai unusually volatile **for cabai**
+    this month". A commodity with only one month, or with no spread on a
+    feature, standardises to zero rather than to a division by zero.
+    """
+    out = fittable[FEATURES].astype(float).copy()
+    for feature in FEATURES:
+        grouped = out.groupby(fittable["commodity"])[feature]
+        spread = grouped.transform("std")
+        centred = out[feature] - grouped.transform("mean")
+        out[feature] = np.where(spread > 0, centred / spread, 0.0)
+    return out.to_numpy(dtype=float)
+
+
+def fit(
+    cells: pd.DataFrame,
+    params: KMeansParams,
+    seed: int,
+    *,
+    within_commodity: bool = False,
+) -> ClusterModel:
     """Standardise, search k, fit the winner, and assign zones.
 
     Only cells that cleared the provenance gate are fitted. The gated ones are
     returned in `assignments` with a null zone and cluster, so the caller can
     persist them and coverage stays reportable.
+
+    `within_commodity` selects the secondary variant described in
+    `scale_within_commodity`. It is a reporting path: the primary, persisted
+    model is the global one, because Tujuan 3 asks for commodities grouped by
+    volatility.
     """
     gated = cells[cells["quality_reason"].notna()]
     fittable = cells[cells["quality_reason"].isna()]
@@ -351,7 +399,12 @@ def fit(cells: pd.DataFrame, params: KMeansParams, seed: int) -> ClusterModel:
 
     matrix = fittable[FEATURES].to_numpy(dtype=float)
     scaler = StandardScaler()
-    scaled = scaler.fit_transform(matrix)
+    if within_commodity:
+        # Still fitted, so `scaler_params` records a real transform; the matrix
+        # it standardises has already had the commodity level removed.
+        scaled = scaler.fit_transform(scale_within_commodity(fittable))
+    else:
+        scaled = scaler.fit_transform(matrix)
 
     entries, k = search_k(scaled, params, seed)
     model = KMeans(n_clusters=k, n_init=params.n_init, max_iter=params.max_iter, random_state=seed)
@@ -363,6 +416,11 @@ def fit(cells: pd.DataFrame, params: KMeansParams, seed: int) -> ClusterModel:
     # Centroids are reported in original units, not standardised ones: a
     # centroid of "0.043 daily log-return sigma, +12% over the month" is
     # checkable by a human, whereas "1.7 standard deviations" is not.
+    #
+    # For the within-commodity variant this inverts only the outer scaler, so
+    # the numbers are in units of "standard deviations of this commodity's own
+    # history" and are NOT comparable with the global model's. `variant` on the
+    # returned model says which, so a reader cannot mistake one for the other.
     original = scaler.inverse_transform(model.cluster_centers_)
     centroids = {
         int(cluster_id): {
@@ -396,6 +454,7 @@ def fit(cells: pd.DataFrame, params: KMeansParams, seed: int) -> ClusterModel:
         zone_mapping=zone_mapping,
         n_samples=len(fittable),
         n_gated=len(gated),
+        variant="within_commodity" if within_commodity else "global",
         gate_reasons={
             str(reason): int(count)
             for reason, count in gated["quality_reason"].value_counts().items()

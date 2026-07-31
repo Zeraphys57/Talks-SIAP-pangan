@@ -162,7 +162,14 @@ kmeans:
   k_min: 2
   k_max: 8
 
-  n_init: 10
+  # 50 restarts, not 10. At n_init=10 the k=3 fit is bimodal: it lands on
+  # silhouette ~0.801 on most seeds and ~0.717 on a minority, and when it lands
+  # low, k=2's 0.7983 wins the search. Swept over 20 seeds, k=3 won 18/20 at
+  # n_init=10 and 20/20 at n_init=25 and above. The ambiguity was the optimiser
+  # failing to converge, not the data being genuinely ambiguous between 2 and 3
+  # clusters — and a selected k that depends on the seed cannot be reported as a
+  # selection. 50 leaves margin over the 25 that first sufficed.
+  n_init: 50
   max_iter: 300
 
   # Below this many cells the clustering itself is not worth trusting.
@@ -212,8 +219,15 @@ kmeans:
     max_imputed_fraction: null
 
   # Post-hoc zone mapping. Clusters are ranked by
-  #     0.5 * z(centroid_volatility) + 0.5 * z(centroid_cum_change)
+  #     0.5 * z(centroid_volatility) + 0.5 * z(max(0, centroid_cum_change))
   # highest -> merah, lowest -> hijau, everything between -> kuning.
+  #
+  # cum_change is clamped at zero because the reader is a BUYER: a month whose
+  # price fell is not a risk to them, so a falling cluster is ranked on its
+  # volatility alone rather than being pushed down the ranking by how far it
+  # fell. abs() would be the wrong fix — it would rank a collapse as merah.
+  # Volatility contributes unsigned and in full, because unpredictability blocks
+  # planning in either direction.
   #
   # k is NOT forced to 3. When the silhouette selects k > 3 the middle clusters
   # merge into kuning, which is stated in docs/methods.md. This is what resolves

@@ -117,6 +117,29 @@ only the regions the calendar window was penalising, which is the evidence that
 it corrected a measurement artefact rather than loosened a standard. `nasional`'s
 flag rate now sits inside the range of the other regions.
 
+**Is the flag-rate rise coverage, or is a longer baseline manufacturing
+deviations?** A 45-day window carries an older baseline, so a slow trend could
+read as deviation on dates that were *already* scoreable. Decomposed, it does
+not: `nasional`'s net rise of +192 flags is +201 on dates the wider window
+recovered and **−8** on dates scoreable at both widths.
+
+| | flags 30D | flags 45D | Δ |
+|---|---|---|---|
+| dates scoreable at both widths (4,188) | 408 | 400 | **−8** |
+| dates recovered by the wider window (2,540) | — | 201 | +201 |
+
+On the already-scoreable dates, mean \|z\| moved 1.3673 → **1.3577** — slightly
+*down*, where the drift hypothesis predicts up. The churn there is symmetric
+(+130 newly flagged, −138 no longer flagged), which is the baseline genuinely
+changing rather than drifting one way. And the recovered dates flag at 7.91%,
+just **below** the region's overall 8.43% — if the wider window were inventing
+deviations, the newly-visible dates would flag at an elevated rate, not a
+slightly depressed one.
+
+Across regions, the share of the 45D flag set sitting on recovered dates is
+`nasional` 33.4%, `di_yogyakarta` 3.2%, `jawa_tengah` 0.4%, `jawa_timur` 0.0% —
+exactly proportional to how much coverage each region was missing.
+
 This does **not** invalidate the M7 candidate pool: the §7.1 annotation
 criterion is deliberately independent of the detector. It is a documented
 deviation from the original protocol and required a full re-run.
@@ -238,59 +261,156 @@ Correcting this moved **137 of 1,485 fitted cells (9.23%)** to a calmer zone
 concentrated exactly where predicted: di_yogyakarta 19.72% of its cells, against
 jawa_timur's 5.32%.
 
-### 3.3 k is selected, not forced
+### 3.3 k is selected, not forced — and the selection is stable across seeds
 
 There was a `k_select_min = 3` floor, because on the raw features the silhouette
 preferred k = 2 (**0.7896** against 0.7057 for k = 3 on run #68) and two clusters
 leave `kuning` unreachable.
 
 The floor is gone. Once the volatility feature is normalised for elapsed time,
-**k = 3 wins the silhouette outright: 0.8019 against 0.7984 for k = 2.** The
+**k = 3 wins the silhouette outright: 0.8009 against 0.7983 for k = 2.** The
 earlier preference for k = 2 was substantially an artefact of the inflated
 feature smearing the middle of the distribution. Nothing needs forcing, and the
 three zones now come from post-hoc centroid ranking at whatever k the silhouette
 selects. If future data selects k = 2, the honest output is two zones.
 
-The margin is thin — 0.0035 — so `fig_k_silhouette` plots the whole curve.
+**A margin of 0.0026 is not, on its own, a selection.** Swept across seeds at
+the original `n_init = 10`, k = 3 won on only 18 of 20 — on the other two the
+k = 3 *fit* landed in a poor local optimum (silhouette 0.7167 rather than
+~0.801) and k = 2 won by default. A selected k that depends on the seed cannot
+be reported as a selection.
+
+The cause was the optimiser, not the data. At `n_init = 25` and above, k = 3
+wins **20 of 20 seeds**; `n_init` is now 50:
+
+| `n_init` | k = 2 wins | k = 3 wins |
+|---|---|---|
+| 10 | 2 / 20 | 18 / 20 |
+| 25 | 0 / 20 | **20 / 20** |
+| 50 | 0 / 20 | **20 / 20** |
+| 100 | 0 / 20 | **20 / 20** |
+
+The margin over k = 2 remains thin and must be reported as thin — the claim is
+that k = 3 wins *reproducibly*, not that it wins *comfortably*.
+`fig_k_silhouette` plots the whole curve.
 
 ### 3.4 The headline silhouette is dominated by one cluster
 
-**0.8019 is a weighted mean, and reporting it alone is misleading.** 95.69% of
+**0.8009 is a weighted mean, and reporting it alone is misleading.** 95.6% of
 fitted cells sit in the one cluster that scores well; the two clusters that
 actually raise anything score far worse:
 
 | cluster | zone | cells | share | silhouette | mean volatility | mean cum_change |
 |---|---|---|---|---|---|---|
-| 0 | `hijau` | 1,421 | 95.69% | **0.8235** | 0.00914 | −1.03% |
-| 1 | `merah` | 43 | 2.90% | **0.3570** | 0.03691 | +86.64% |
-| 2 | `kuning` | 21 | 1.41% | **0.2546** | 0.13386 | +9.99% |
+| 0 | `hijau` | 1,419 | 95.56% | **≈0.82** | 0.00905 | −1.00% |
+| 2 | `merah` | 43 | 2.90% | **≈0.36** | 0.03691 | +86.64% |
+| 1 | `kuning` | 23 | 1.55% | **≈0.25** | 0.12852 | +7.79% |
 
 The bare number is technically true and substantively misleading: it says the
 calm cluster is well separated from everything else, which was never in doubt.
 The alerting clusters — the ones the system exists to produce — are weakly
-separated. Any claim about clustering quality must cite this table, not 0.8019.
+separated. Any claim about clustering quality must cite this table, not 0.8009.
 
-### 3.5 Zone ranking is not monotone in volatility, and that needs saying
+### 3.5 Zone ranking is not monotone in volatility
 
-`merah` has **lower** mean volatility than `kuning` (0.03691 against 0.13386).
+`merah` has **lower** mean volatility than `kuning` (0.03691 against 0.12852).
 Unexplained, that table reads as a bug. It is not: zones rank centroids on
 
-    severity = 0.5 · z(volatility) + 0.5 · z(cum_change)
+    severity = 0.5 · z(volatility) + 0.5 · z(max(0, cum_change))
 
 so a cluster with moderate volatility and a +86.64% cumulative rise outranks one
-with very high volatility and a +9.99% rise. `cum_change` is signed and, on this
-data, has by far the wider spread, so it dominates the composite.
+with very high volatility and a +7.79% rise. On this data `cum_change` has much
+the wider spread at centroid level, so it dominates the composite.
 
-**This is a live design problem, not merely a documentation one.** The `kuning`
-cluster holds the most violently moving months in the archive — 13.4% daily
-log-return σ — under a label the dashboard renders as "Cukup bergerak … tidak
-seliar kelompok merah", which is the opposite of true for those 21 cells. The
-ranking weights are in `analysis.yaml` and were not tuned; whether severity
-should be composite at all, or whether volatility should rank alone with
-`cum_change` shown separately, is an open decision recorded here rather than
-silently resolved.
+**`cum_change` is clamped at zero** because the reader is a buyer: a month whose
+price fell is not a risk to them, so a falling cluster is ranked on volatility
+alone rather than being pushed down the ranking by how far it fell. `abs()` was
+rejected — it would rank a collapse as `merah`, warning about the one movement
+in the reader's favour. Volatility contributes unsigned and in full, because
+unpredictability blocks planning in either direction.
+
+**The clamp did not restore monotonicity, and was not expected to.** It moved
+zero cells on the current data — the `kuning` centroid's cum_change was already
+positive (+7.79%) and `hijau`'s was −1.00%, which clamps to 0 without changing
+the ranking. It is a guard for a state the archive has had before (run #68 held
+a `kuning` centroid at −13.06%) rather than a fix for this one.
+
+What *would* restore monotonicity is re-weighting, measured on the current
+centroids:
+
+| severity weights | `hijau` σ | `kuning` σ | `merah` σ | monotone? |
+|---|---|---|---|---|
+| 0.5 / 0.5 (current) | 0.00905 | 0.12852 | 0.03691 | no |
+| 0.7 / 0.3 | 0.00905 | 0.03691 | 0.12852 | **yes** |
+| 0.8 / 0.2 | 0.00905 | 0.03691 | 0.12852 | **yes** |
+| volatility only | 0.00905 | 0.03691 | 0.12852 | **yes** |
+
+This is a real trade, not a free fix: at 0.7/0.3 the cluster that rose **+86.64%
+over a month** becomes `kuning` rather than `merah`. For a warung owner deciding
+what to buy, a sustained 86% climb is arguably the most consequential thing on
+the board. Monotonicity in volatility and severity-for-a-buyer are not the same
+ordering, and the weights are left at 0.5/0.5 pending an explicit decision.
+
+**The dashboard copy was wrong and has been fixed regardless.** `kuning`
+previously read "tidak seliar kelompok merah" — false for those 23 cells, which
+are the most violently swinging months in the archive. The zones are now
+described by what their centroids *are* — `merah` "Naik tajam sepanjang bulan",
+`kuning` "Naik-turun tajam" — rather than by an implied volatility ranking.
 
 Zones describe how a price **has behaved**, not where it will go.
+
+### 3.6 The global clustering largely recovers commodity identity
+
+Measured, because it changes what the clustering can be claimed to show.
+
+**Commodity composition of each zone (run #80):**
+
+| zone | cells | distinct commodities | composition |
+|---|---|---|---|
+| `merah` | 43 | **3 / 12** | cabai-rawit 56%, cabai-keriting 40%, bawang-merah 5% |
+| `kuning` | 23 | 6 / 12 | cabai-rawit 39%, cabai-keriting 35%, bawang-merah 13% |
+| `hijau` | 1,419 | 12 / 12 | evenly spread, 7–10% each |
+
+`merah` is **100% cabai and bawang-merah**. `kuning` is 87% the same three.
+
+**Zone stability, month to month:** of 1,437 consecutive month pairs for the same
+commodity × region, only **7.6% change zone**. Broken down, the movement is
+almost entirely two commodities:
+
+| commodity | flips | pairs | rate |
+|---|---|---|---|
+| cabai-rawit-merah | 57 | 133 | **42.9%** |
+| cabai-merah-keriting | 38 | 133 | **28.6%** |
+| bawang-merah | 7 | 128 | 5.5% |
+| the other nine | ≤2 each | — | **0–1.5%** |
+
+Thirty-three of 48 series never leave a single zone.
+
+So the global model is substantially a *commodity* classifier with a temporal
+component confined to cabai and bawang-merah. That is a defensible answer to
+Tujuan 3, which asks for commodities grouped by volatility — but it is **not**
+the claim the dashboard makes when it presents a zone as a statement about a
+month.
+
+**Secondary analysis: features standardised within each commodity.** Removing
+the between-commodity level leaves only "is this commodity unusual *for itself*
+this month". Run with `siap cluster --within-commodity`; it reports and does not
+persist, because the primary model is the global one.
+
+| | global | within-commodity |
+|---|---|---|
+| k selected | 3 | **2** |
+| silhouette | 0.8009 | 0.7755 |
+| `merah` composition | **3 / 12** commodities | **12 / 12**, evenly spread |
+| zone flips month-to-month | 7.6% | 2.4% |
+
+The alerting cluster goes from three commodities to all twelve — bawang-putih
+17%, beras-medium 12%, bawang-merah 10%, cabai-rawit 10%. That is the temporal
+reading: every commodity has its own unusual months, and the global model was
+hiding eleven of them behind cabai's price level.
+
+Both are reported. Neither replaces the other: the global model answers Tujuan 3
+as written, the within-commodity model answers what the dashboard says it shows.
 
 ---
 
@@ -341,13 +461,10 @@ Per region, as a share of that region's alerts: `nasional` 1.18%,
 `jawa_tengah` 0.89%, `di_yogyakarta` 0.90%, `jawa_timur` 0.64%, and
 `kota_yogyakarta` **100%**.
 
-> A correction worth recording, because it shaped the original diagnosis. The
-> figures of 41.31% (`nasional`) and 13.66% (`di_yogyakarta`) are the **z-score**
-> NULL rates at the 30-day window, not the rate at which this code path fired.
-> Those dates still had an Isolation Forest score, so `A` came from one detector
-> rather than none and the row was scored on real evidence. The path that
-> returned 0.0 for genuine absence fires only where *neither* detector scored,
-> which is the much smaller set above. `kota_yogyakarta`'s 100% was exact.
+The rate is measured, not inferred from either detector's NULL rate: the path
+fires only where **neither** detector scored, which is a much smaller set than
+the z-score NULL rate alone (§2.3). A date the z-score could not judge but
+Isolation Forest could is a scored date, on one detector's evidence.
 
 M, D and C are still recorded on an unscored row — they are what *was*
 observable, and the audit trail should show it. A large weekly move on a date no

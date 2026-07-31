@@ -103,14 +103,27 @@ export const REASON_COPY: Record<string, string> = {
     "Wilayah ini hanya punya satu sumber data, jadi tidak ada pembanding.",
 };
 
+/**
+ * Zone copy describes what each cluster's centroid actually is.
+ *
+ * The previous wording ranked the zones by volatility — `kuning` was "tidak
+ * seliar kelompok merah". That is false on the data: `kuning` holds the most
+ * violently swinging months in the archive (0.129 daily log-return sigma
+ * against `merah`'s 0.037). The zones are ranked on a composite of volatility
+ * *and* cumulative rise, so `merah` is the sustained-climb cluster and `kuning`
+ * is the wild-swing cluster. Neither dominates the other on volatility alone,
+ * and the copy must not imply an ordering the ranking does not produce.
+ */
 export const ZONE_COPY: Record<string, { label: string; meaning: string }> = {
   merah: {
-    label: "Sering bergejolak",
-    meaning: "Dibanding komoditas lain, harga bahan ini paling sering berubah tajam.",
+    label: "Naik tajam sepanjang bulan",
+    meaning:
+      "Harga bahan ini menanjak jauh dari awal ke akhir bulan, bukan sekadar naik-turun.",
   },
   kuning: {
-    label: "Cukup bergerak",
-    meaning: "Harganya bergerak lumayan, tapi tidak seliar kelompok merah.",
+    label: "Naik-turun tajam",
+    meaning:
+      "Harganya berayun keras dari hari ke hari, walau akhir bulan belum tentu jauh dari awalnya.",
   },
   hijau: {
     label: "Cenderung stabil",

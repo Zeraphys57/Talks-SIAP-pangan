@@ -191,6 +191,34 @@ def test_zones_rank_by_severity_not_by_cluster_id() -> None:
     assert mapping[2] == "kuning"
 
 
+def test_a_crash_is_never_merah() -> None:
+    """`abs(cum_change)` would rank a collapse as the top warning.
+
+    The reader is a buyer. A month whose price fell 30% is the one movement in
+    their favour, and telling them to worry about it inverts the whole point.
+    """
+    params = _params()
+    # A violently falling cluster, a calm one, and a modest riser.
+    centroids = np.array([[0.09, -0.30], [0.004, 0.00], [0.03, 0.12]])
+    mapping = kmeans.assign_zones(centroids, params)
+    assert mapping[0] != "merah", "a price collapse was ranked as the top warning"
+    assert mapping[2] == "merah"
+
+
+def test_falling_clusters_rank_on_volatility_not_on_how_far_they_fell() -> None:
+    """Clamping at zero, rather than keeping the sign, is what does this.
+
+    With a signed cum_change, the further a cluster fell the further it was
+    pushed towards hijau — so a wildly volatile crash outranked a calm one in
+    safety. Both are equally not-a-rise; what separates them is volatility.
+    """
+    params = _params()
+    gentle_fall = np.array([[0.004, -0.02], [0.05, -0.30], [0.03, 0.40]])
+    mapping = kmeans.assign_zones(gentle_fall, params)
+    assert mapping[0] == "hijau", "the calm cluster should be the safe one"
+    assert mapping[1] == "kuning", "a volatile faller must not outrank a calm one for safety"
+
+
 def test_zone_mapping_covers_every_cluster() -> None:
     params = _params()
     rng = np.random.default_rng(3)
@@ -283,6 +311,51 @@ def test_every_k_in_the_range_stays_in_the_recorded_curve() -> None:
     model = kmeans.fit(_mixed_cells(), cfg.kmeans, cfg.seed)
     recorded = {e.k for e in model.k_search}
     assert recorded == set(range(cfg.kmeans.k_min, cfg.kmeans.k_max + 1))
+
+
+def test_within_commodity_scaling_removes_the_between_commodity_level() -> None:
+    """The secondary variant asks a different question, so it must see different data.
+
+    Globally, cabai's volatility dwarfs beras's and the clusters recover that.
+    Standardising inside each commodity leaves only "unusual for itself", so two
+    commodities with different levels but the same shape become identical.
+    """
+    params = _params()
+    frame = pd.concat(
+        [
+            _daily("cabai", "r", months=6, level=40_000.0),
+            _daily("beras", "r", months=6, level=13_000.0),
+        ]
+    )
+    cells = kmeans.build_cells(frame, params)
+    fittable = cells[cells["quality_reason"].isna()]
+    scaled = kmeans.scale_within_commodity(fittable)
+
+    for commodity in ("cabai", "beras"):
+        rows = scaled[(fittable["commodity"] == commodity).to_numpy()]
+        assert np.allclose(rows.mean(axis=0), 0.0, atol=1e-9), (
+            f"{commodity} was not centred within itself"
+        )
+
+
+def test_a_commodity_with_no_spread_standardises_to_zero_not_to_nan() -> None:
+    """One month, or an unvarying feature, must not divide by zero."""
+    params = _params()
+    frame = _daily("gula-pasir", "r", months=1)
+    cells = kmeans.build_cells(frame, params)
+    fittable = cells[cells["quality_reason"].isna()]
+    scaled = kmeans.scale_within_commodity(fittable)
+    assert np.isfinite(scaled).all()
+    assert (scaled == 0.0).all(), "a single month has no within-commodity spread"
+
+
+def test_the_two_variants_are_labelled_so_centroids_are_not_confused() -> None:
+    cfg = load_analysis()
+    cells = _mixed_cells()
+    assert kmeans.fit(cells, cfg.kmeans, cfg.seed).variant == "global"
+    assert (
+        kmeans.fit(cells, cfg.kmeans, cfg.seed, within_commodity=True).variant == "within_commodity"
+    )
 
 
 def test_no_floor_manufactures_a_zone_the_data_does_not_support() -> None:

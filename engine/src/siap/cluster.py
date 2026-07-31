@@ -183,6 +183,27 @@ def run_clustering(conn: Conn, config: AnalysisConfig | None = None) -> ClusterR
     return report
 
 
+def report_within_commodity(
+    conn: Conn, config: AnalysisConfig | None = None
+) -> tuple[kmeans.ClusterModel, kmeans.ClusterModel]:
+    """Fit both variants on the same cells and return (global, within_commodity).
+
+    Deliberately writes nothing. The persisted model is the global one, because
+    Tujuan 3 asks for commodities grouped by volatility and the global fit is
+    what answers that. This variant exists because the global fit answers it *so
+    well* that it stops being a claim about periods — `merah` is 100% cabai and
+    bawang-merah, and eight of twelve commodities never leave one zone.
+    """
+    cfg = config or load_analysis()
+    cells = kmeans.build_cells(load_cells(conn), cfg.kmeans)
+    if cells.empty:
+        raise ValueError("no monthly cells could be built; nothing to cluster")
+    return (
+        kmeans.fit(cells, cfg.kmeans, cfg.seed),
+        kmeans.fit(cells, cfg.kmeans, cfg.seed, within_commodity=True),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Reporting for the M4 gate
 # ---------------------------------------------------------------------------

@@ -432,3 +432,74 @@ bukan ditemukan orang lain.
 - **Sistem ini tidak meramal.** Kalau ada pertanyaan tentang harga besok,
   jawabannya bukan "belum sempat", tapi "di luar ruang lingkup, dan itu keputusan
   desain".
+
+### 8.1 Cakupan clustering per wilayah
+
+Tidak semua sel bulanan layak dimodelkan. Yang tidak layak **tetap disimpan**
+dengan `zone = NULL` dan alasannya — sengaja tidak dihapus, supaya angka di bawah
+ini bisa dilaporkan sama sekali.
+
+| wilayah | ter-fit | tipis | datar | basi | cakupan |
+|---|---|---|---|---|---|
+| jawa_timur | 432 / 444 | 12 | 0 | 0 | **97,3%** |
+| jawa_tengah | 416 / 444 | 12 | 6 | 10 | **93,7%** |
+| di_yogyakarta | 289 / 444 | 12 | 73 | 70 | **65,1%** |
+| nasional | 348 / 348 | 0 | 0 | 0 | 100% |
+| kota_yogyakarta | 0 / 12 | 12 | 0 | 0 | **0%** |
+
+Kalau ditanya kenapa DIY jauh di bawah Jatim: karena di DIY, PIHPS adalah satu-
+satunya sumber, dan PIHPS sering membawa nilai kemarin daripada mensurvei ulang.
+
+### 8.2 Artefak jarak hari, dan kenapa ini justru temuan
+
+Baris hasil imputasi dikeluarkan dari perhitungan volatilitas. Akibatnya, dua
+pengamatan nyata yang berurutan **belum tentu dua hari berurutan**: langkah
+Jumat→Senin adalah satu perubahan yang menempuh tiga hari. Ragam perubahan
+tiga-hari kira-kira 3× ragam perubahan satu-hari, jadi tanpa koreksi simpangan
+bakunya menggelembung ≈1,73× pada setiap langkah seperti itu.
+
+Dan langkah seperti itu tidak tersebar merata:
+
+| wilayah | rata-rata jarak (hari) | volatilitas mentah | ÷√Δt | rasio |
+|---|---|---|---|---|
+| jawa_timur | 1,000 | 0,00936 | 0,00936 | 1,000 |
+| jawa_tengah | 1,364 | 0,01229 | 0,01031 | 1,191 |
+| nasional | 1,438 | 0,01314 | 0,01149 | 1,144 |
+| di_yogyakarta | 1,373 | 0,02149 | 0,01749 | **1,228** |
+
+Semua wilayah masuk ke **satu** K-Means yang sama. Jadi sebelum dikoreksi, DIY
+terukur ~23% lebih bergejolak daripada Jatim **sebagian karena jadwal terbit
+portalnya**, bukan karena pasarnya. Jatim tepat 1,000 karena portalnya terbit
+tiap hari — itu kontrolnya.
+
+Setelah setiap log-return dibagi √(jumlah hari), 137 dari 1.485 sel (9,23%)
+pindah ke zona yang lebih tenang, terkonsentrasi di DIY (19,72%) lawan Jatim
+(5,32%).
+
+### 8.3 Wilayah utama: Jawa Timur
+
+**Angka utama di paper dihitung pada `jawa_timur`.** Alasannya bukan preferensi,
+tapi karena Jatim adalah satu-satunya wilayah yang cakupannya tidak dibatasi
+kualitas data pihak ketiga: 97,3% sel ter-fit, jarak hari tepat 1,000, tiga
+sumber melapor, nol sel yang ter-gate karena datar atau basi.
+
+**DIY tetap dilaporkan penuh, tapi sebagai studi kasus kualitas data — dan itu
+hasil, bukan kekurangan.** Empat pengukuran, semuanya terjadi **selama PIHPS
+menjadi satu-satunya sumber**:
+
+- **Deretan 152 hari tanpa perubahan.** `daging-sapi` tercatat persis
+  Rp 140.000 dari 31 Juli 2023 sampai 29 Februari 2024 — 152 pengamatan
+  "nyata" beruntun dengan angka identik. Bukan harga yang diam selama tujuh
+  bulan; itu survei yang berhenti diperbarui. Tiga deretan terpanjang berikutnya
+  (114, 106, 50 hari) juga semuanya di DIY.
+- **Akhir pekan 98,72% hasil imputasi.** Bandingkan Jatim: **0,00%**.
+- **Cakupan clustering 65,1%**, lawan 97,3% Jatim.
+- **Volatilitas menggelembung 1,228×** murni karena jarak hari.
+
+Itu persis dukungan empiris untuk tesis multi-sumber di Tabel 2 proposal: bukan
+argumen bahwa banyak sumber itu lebih baik secara prinsip, tapi pengukuran
+tentang apa yang terjadi ketika hanya ada satu. Jatim, dengan tiga sumber,
+adalah pembandingnya dalam dataset yang sama dan periode yang sama.
+
+Kalau ditanya "kenapa tidak pakai DIY saja karena kampusnya di Yogya" — jawabannya
+adalah tabel 8.1 dan 8.2 di atas.
