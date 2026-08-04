@@ -17,6 +17,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Any
 
+from psycopg.pq import TransactionStatus
 from psycopg.types.json import Json
 
 from .db import Conn, fetch_value
@@ -96,6 +97,25 @@ class Run:
         self.notes.append(message)
 
     def finish(self, status: str = "success") -> None:
+        """Close the run. Must work when the run failed on a database error.
+
+        Every analysis module calls this from a `finally`, so the failing path
+        is the one that matters most — and it arrives with the transaction in
+        INERROR, where Postgres refuses every further statement including this
+        UPDATE. Without the rollback the failure cannot record itself: the row
+        stays `running`, which reads as a hang rather than an error, and only
+        `close_stale` corrects it hours later.
+
+        This happened. Migration 0011 narrowed `alerts_level_known` while the
+        scheduled pipeline still ran the pre-M10 vocabulary, so every fusion
+        run from #79 onward violated the constraint and then sat at `running`
+        for a day. The constraint did its job; the reporting did not.
+
+        Rolling back discards only work that already failed. `start_run`
+        commits the run row itself, so the row being updated survives.
+        """
+        if self.conn.info.transaction_status == TransactionStatus.INERROR:
+            self.conn.rollback()
         with self.conn.cursor() as cur:
             cur.execute(
                 "update public.analysis_runs "

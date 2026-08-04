@@ -6,6 +6,43 @@ reason, so they can be defended rather than discovered.
 
 ---
 
+## Incident — the schedule ran pre-M10 code against an M10 schema (2026-08-04)
+
+Migration `0011` was applied to production on 2026-07-30 17:31 UTC, narrowing
+`alerts_level_known` to `tenang/waspada/siaga/belum_dapat_dinilai`. The M10
+commits that emit that vocabulary were never pushed, so GitHub Actions kept
+checking out `7a734fb`, where `LEVELS = ("hijau", "kuning", "merah")`. Every
+scheduled `siap fuse` from run #79 onward violated the constraint.
+
+The control is unusually clean: same database, same evening. Fusion #69 (17:44)
+and #72 (17:54) ran M10 code and succeeded; #79 (20:23) ran the CI checkout and
+failed. #88, #95, #102 and #109 followed. `alerts` was last written by run #72 —
+39,173 rows, `obs_date` ending 2026-07-29 — so the dashboard served six-day-old
+levels while reporting nothing wrong.
+
+**The constraint worked. The reporting did not.** Every module closes its run
+from a `finally`, but `Run.finish` issued its UPDATE on the same connection,
+which a constraint violation had already put in INERROR. The UPDATE was refused,
+the row stayed `running`, and the failure read as a hang until the next day's
+`siap runs --close-stale 6` swept it. `finish` now rolls back an aborted
+transaction before recording the status; `start_run` commits the run row, so
+there is nothing else to lose. Covered by `engine/tests/test_runs.py`.
+
+Two lessons kept rather than fixed silently:
+
+- **A migration applied by hand to production is a deploy.** Schema moved on one
+  path (local `siap migrate`) and code on another (`git push`), and nothing
+  compared them. `siap doctor` checks the schema against the catalog, not the
+  schema against the code that writes to it.
+- **`running` is not a state a dead process can report.** Any status that
+  depends on the failing process still being alive will be wrong exactly when it
+  matters; `close_stale` is the backstop, not the mechanism.
+
+No ground-truth labels existed at any point during this window, so nothing
+downstream of `gt_labels` is affected.
+
+---
+
 ## M10 — Two vocabularies, a provenance gate, and three measurements (2026-07-31)
 
 ### The zone and the level stopped sharing words
