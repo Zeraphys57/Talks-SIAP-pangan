@@ -150,7 +150,7 @@ def _quantise(value: Any) -> Decimal | None:
 
 def verify(conn: Conn, run_id: int, config: AnalysisConfig | None = None) -> ReproduceReport:
     """Recompute a stored anomaly run and compare it row by row."""
-    from .analyze import load_demand, load_series
+    from .analyze import demand_scope, load_demand, load_series
 
     record = load_run(conn, run_id)
     if record is None:
@@ -190,7 +190,7 @@ def verify(conn: Conn, run_id: int, config: AnalysisConfig | None = None) -> Rep
         conn,
         """
         select distinct u.commodity_id, u.region_id,
-               c.slug as commodity, rg.slug as region, rg.level as region_level
+               c.slug as commodity, rg.slug as region
           from public.price_daily_unified u
           join public.commodities c on c.id = u.commodity_id
           join public.regions rg on rg.id = u.region_id
@@ -204,7 +204,9 @@ def verify(conn: Conn, run_id: int, config: AnalysisConfig | None = None) -> Rep
         if frame.empty:
             continue
         report.series_checked += 1
-        demand = load_demand(conn, commodity_id, str(pair["region_level"]))
+        # The same rule `analyze` applied, from the same place. Deriving it a
+        # second time here is what made this check compare two different models.
+        demand = load_demand(conn, commodity_id, demand_scope(str(pair["region"])))
 
         for method, recomputed in (
             (zscore.METHOD, zscore.compute(frame, z_params)),

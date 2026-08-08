@@ -187,11 +187,17 @@ place.
 `log_price`, `pct_change_1d`, `pct_change_7d`, `rolling_std_14d`, `demand_z52`,
 `dow`. `random_state` comes from `analysis.seed`.
 
-`demand_missing_fill = 0.0`: Google Trends is throttled to zero at time of
-writing, so `demand_z52` is absent. Filling with a constant rather than dropping
-the column keeps the feature matrix identical between runs whether or not Trends
-worked — a constant column yields no splits, so the model behaves as if the
-feature were absent, but reproducibly so.
+`demand_missing_fill = 0.0`: Trends is best-effort and has been unavailable for
+long stretches, so `demand_z52` is filled rather than dropped. A constant column
+yields no splits, so a run without Trends behaves as if the feature were absent
+but stays comparable to one with it.
+
+**Trends is collected for two scopes only** — `nasional` and `di_yogyakarta`.
+Every other region is scored against the national signal (`analyze.demand_scope`).
+As of 2026-08-08 Trends is answering again: 4,219 weekly `interest_z52` values
+are stored and `demand_z52` is a live feature, not a constant. Any run whose
+notes report it absent predates that, and the four-arm comparison in §6 must say
+which regime each arm was measured under.
 
 **Contamination is a cut depth, not a model choice.** Verified, not assumed: the
 flag sets are strictly nested — every day flagged at 0.01 is flagged at 0.03,

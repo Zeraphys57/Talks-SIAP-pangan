@@ -73,6 +73,28 @@ def load_series(
     )
 
 
+# Trends is collected for two scopes only; every other region is scored against
+# the national signal.
+DEMAND_SCOPES = ("nasional", "di_yogyakarta")
+
+
+def demand_scope(region_slug: str) -> str:
+    """The `demand_signals.region_scope` a region's series is scored against.
+
+    Shared with `siap reproduce` deliberately. Reproduce used to derive this
+    itself from `regions.level` — 'province', 'city', 'national' — which matches
+    no `region_scope` at all, so `load_demand` returned nothing and the check
+    refitted every forest on a constant `demand_z52` before comparing it against
+    a model fitted on the real one. 37,597 of 79,114 scores "differed".
+
+    It went unnoticed because Trends was throttled: both sides got an empty
+    series and agreed. The moment Trends returned, the verifier started failing
+    on a difference it was creating itself. Two copies of a lookup rule is one
+    copy too many when one of them exists to check the other.
+    """
+    return region_slug if region_slug in DEMAND_SCOPES else "nasional"
+
+
 def load_demand(conn: Conn, commodity_id: int, region_scope: str) -> pd.Series:
     """Weekly `interest_z52`, indexed by week_start. Empty when Trends has no data."""
     rows = fetch_all(
@@ -157,6 +179,7 @@ def run_detectors(conn: Conn, config: AnalysisConfig | None = None) -> AnalyzeRe
     )
 
     status = "failed"
+    with_demand = 0
     try:
         for pair in pairs:
             commodity_id, region_id = int(pair["commodity_id"]), int(pair["region_id"])
@@ -177,9 +200,9 @@ def run_detectors(conn: Conn, config: AnalysisConfig | None = None) -> AnalyzeRe
             result.zscore_flagged = int(zs["is_flagged"].sum())
             result.zscore_null = int(zs["raw_score"].isna().sum())
 
-            # Trends is national/DIY only; other regions fall back to national.
-            scope = result.region if result.region in ("nasional", "di_yogyakarta") else "nasional"
-            demand = load_demand(conn, commodity_id, scope)
+            demand = load_demand(conn, commodity_id, demand_scope(result.region))
+            if not demand.empty:
+                with_demand += 1
 
             forest = iforest.compute(frame, cfg.iforest, cfg.seed, demand)
             report.rows_written += _persist(
@@ -204,10 +227,17 @@ def run_detectors(conn: Conn, config: AnalysisConfig | None = None) -> AnalyzeRe
 
         if not any((s.iforest_flagged or s.iforest_null < s.n_rows) for s in report.series):
             run.note("no series produced Isolation Forest scores")
+        # Measured, not assumed. This note asserted "Trends throttled" on every
+        # run regardless, and kept asserting it after Trends came back — a run
+        # record claiming less than the run actually used.
         run.note(
             f"scored {len(report.series)} series, {report.rows_written} score rows; "
-            f"demand_z52 unavailable (Trends throttled) and filled with "
-            f"{cfg.iforest.demand_missing_fill}"
+            + (
+                f"demand_z52 present for {with_demand} series"
+                if with_demand
+                else f"demand_z52 unavailable for every series and filled with "
+                f"{cfg.iforest.demand_missing_fill}"
+            )
         )
         status = "partial" if report.skipped else "success"
     finally:

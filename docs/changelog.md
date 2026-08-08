@@ -6,6 +6,46 @@ reason, so they can be defended rather than discovered.
 
 ---
 
+## Incident — the determinism check was comparing two different models (2026-08-08)
+
+With fusion fixed, the scheduled pipeline went on failing at a different step:
+`siap reproduce` reported **37,597 of 79,114 scores differing**, every one of
+them `iforest`.
+
+The detector was never at fault. `analyze` resolves the Trends scope as
+`nasional` / `di_yogyakarta`, falling back to national; `verify` derived it
+independently and passed `regions.level` — `province`, `city`, `national` —
+which matches no `demand_signals.region_scope` at all. `load_demand` returned
+nothing, so the verifier refitted every forest on a constant `demand_z52` and
+compared it against a model fitted on the real signal.
+
+Measured on `bawang-merah/di_yogyakarta`, run #134: the old path resolves
+`province` → 0 demand rows → 782 of 789 scores differ. The new path resolves
+`di_yogyakarta` → 209 demand rows → **789 of 789 identical**. The stored scores
+were correct throughout; M9's claim was unverified, never disproven.
+
+**Why it stayed hidden.** While Trends was throttled both paths loaded an empty
+series and agreed — which is what run #47's 78,274 identical scores actually
+demonstrated. Trends began answering again on 2026-08-03, and the verifier
+started failing on a difference it was creating itself. A check that shares no
+code with the thing it checks can agree for the wrong reason.
+
+The rule now lives once, in `analyze.demand_scope`, and `verify` imports it.
+`engine/tests/test_reproduce.py` guards both the mapping and the fact that
+`verify` resolves through it.
+
+**Two stale claims corrected alongside.** `analyze` appended
+`"demand_z52 unavailable (Trends throttled)"` to every run unconditionally, and
+kept asserting it after Trends returned — run #134 says demand was absent while
+using 4,219 stored `interest_z52` values. It now reports what it measured.
+`docs/methods.md` §2.2 said the same thing and has been updated: `demand_z52` is
+a live feature again, and any arm of the §6 comparison must say which regime it
+was measured under.
+
+No ground-truth labels existed during this window either.
+
+---
+
 ## Incident — the schedule ran pre-M10 code against an M10 schema (2026-08-04)
 
 Migration `0011` was applied to production on 2026-07-30 17:31 UTC, narrowing

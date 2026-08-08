@@ -173,3 +173,46 @@ def test_only_anomaly_runs_are_verifiable(run_type: str) -> None:
             verify(_Conn(), 1)  # type: ignore[arg-type]
     finally:
         module.load_run = original  # type: ignore[assignment]
+
+
+# ---------------------------------------------------------------------------
+# The demand scope, which the verifier once derived for itself
+# ---------------------------------------------------------------------------
+def test_every_region_maps_to_a_scope_trends_is_actually_collected_for() -> None:
+    """Regions outside Trends' two scopes fall back to national, never to nothing."""
+    from siap.analyze import DEMAND_SCOPES, demand_scope
+
+    for slug in ("nasional", "di_yogyakarta", "jawa_tengah", "jawa_timur", "kota_yogyakarta"):
+        assert demand_scope(slug) in DEMAND_SCOPES
+
+
+def test_the_two_collected_scopes_map_to_themselves() -> None:
+    from siap.analyze import demand_scope
+
+    assert demand_scope("nasional") == "nasional"
+    assert demand_scope("di_yogyakarta") == "di_yogyakarta"
+
+
+def test_a_region_level_is_not_a_demand_scope() -> None:
+    """The regression itself.
+
+    `verify` passed `regions.level` — 'province', 'city', 'national' — where a
+    `region_scope` was wanted. It matched no row, `load_demand` returned empty,
+    and every forest was refitted on a constant `demand_z52` and then compared
+    against one fitted on the real signal. Silent while Trends was throttled.
+    """
+    from siap.analyze import DEMAND_SCOPES
+
+    for level in ("province", "city", "national"):
+        assert level not in DEMAND_SCOPES
+
+
+def test_the_verifier_resolves_demand_through_the_shared_rule() -> None:
+    """Guards against the two copies drifting apart a second time."""
+    import inspect
+
+    from siap.reproduce import verify
+
+    source = inspect.getsource(verify)
+    assert "demand_scope(" in source, "verify must use analyze's rule, not its own"
+    assert "region_level" not in source, "regions.level is not a demand scope"
