@@ -6,6 +6,88 @@ reason, so they can be defended rather than discovered.
 
 ---
 
+## M7 result — the kappa gate failed at 0.1575 (2026-09-19)
+
+Both annotators finished all 399 candidates: A1 over five weeks (2026-08-08 to
+09-15), A2 in three days (08-08 to 08-11). 798 labels, 399 paired.
+
+```
+observed agree  : 0.8822
+expected agree  : 0.8602
+Cohen's kappa   : 0.1575   (slight)
+gate            : >= 0.60
+```
+
+**Why the 88% is not the story.** Both annotators labelled almost everything
+`normal` — A1 357/399, A2 382/399 — so 86% agreement is what two people would
+reach by chance at those base rates. Kappa is reported precisely because
+accuracy cannot tell that apart.
+
+Where the 47 disagreements are:
+
+| | |
+|---|---|
+| cabai-merah-keriting, cabai-rawit-merah, bawang-merah | 31 of 47 |
+| A1 `anomali` | 35, of which A2 agreed with 6 |
+| A2 `anomali` | 16, of which A1 agreed with 6 |
+| stratum `random_control` | A1 found 4 anomalies, A2 none |
+
+Those three commodities are the series §1 of `docs/labelling.md` already names
+as carrying a 5-9% residual after source linking. The +/-10% / 2-day bar is
+drawn on the chart and is not what they disagreed about: cabai clears it
+routinely, so the arithmetic half of the definition decides almost nothing there
+and the judgement falls entirely to the half with no operational rule — real
+market event or data artefact, and what counts as corroboration.
+
+Two process differences visible in the labels themselves, both worth fixing
+before a second round:
+
+- A1 wrote a note on 334 of 357 `normal` labels; A2 wrote none, and supplied a
+  URL on 55 of 382. A2 used `ragu` once, A1 seven times.
+- A1's own anomali rate moved within the round: 6/36, then 23/166, then 6/187
+  after a four-week gap. Drift inside one annotator is not something kappa can
+  separate from disagreement between two.
+
+Per the brief this is a stop, not material for adjudication: revise the
+operational definition, re-label, report both rounds. `gt_events` is still
+empty, `siap ablate` and `siap export` have not been run, and no precision,
+recall or F1 number exists for this round.
+
+---
+
+## Incident — a plain `gt-pool` grew a pool that had already been labelled (2026-09-19)
+
+Run #160 inserted 280 new candidates into the 399-candidate pool, taking it to
+679 and the annotators' queue with it. It was run as a progress check: the
+labelling progress table is printed by `siap gt-pool`, and the command was
+assumed to be read-only.
+
+It is not. `generate_pool` skips rows already present, which makes a re-run
+idempotent only against unchanged data. The pool was drawn on 2026-08-08 from
+data ending 2026-07-29 or 08-04; by 09-19 ingestion had carried the series to
+08-10, so the seeded sampler selected 399 dates again, of which only 119
+coincided with the existing pool, and inserted the other 280.
+
+The guard that exists for exactly this — `clear_pool`, refusing once any label
+exists — sat on `--redraw` alone. The path without a flag could do the same
+damage more quietly, which is the wrong way round.
+
+**Reverted.** The 280 rows all carried `generated_by_run = 160` and zero labels
+(`gt_labels` cascades on delete, so this was checked before deleting rather
+than after). The pool is back to its 399, all from run #138, with 798 labels
+and a queue of 399. Run #160 is left in `analysis_runs`; deleting the record of
+a mistake is not the same as fixing it.
+
+**Fixed.** `generate_pool` now refuses to insert new candidates once any label
+exists, unless `--grow` is passed, and it refuses before building a single
+context blob rather than after several minutes of them. A re-run that writes
+nothing is still allowed, because reading labelling progress is what the
+command is also for. `ValueError` was added to the `gt-pool` error handling: both
+guards raise it, and until now both would have surfaced as a traceback rather
+than as the deliberate refusal they are.
+
+---
+
 ## Incident — the determinism check was comparing two different models (2026-08-08)
 
 With fusion fixed, the scheduled pipeline went on failing at a different step:

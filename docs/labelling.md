@@ -19,7 +19,13 @@ The pool must be drawn from the data the annotators will effectively be judging.
 If anything upstream has changed — new backfill, a preprocessing change — re-run
 `preprocess -> analyze -> cluster -> seasonal -> fuse`, then
 `siap gt-pool --redraw`, **before** labelling starts. Once a label exists the
-pool must not be redrawn, and `siap gt-pool --redraw` refuses by design.
+pool must not change, and both paths that could change it refuse by design:
+`--redraw` discards nothing, and a plain `siap gt-pool` will not add candidates
+either. Adding is the one that looks harmless — the sampler draws from whatever
+data exists now, so a re-run after a backfill selects dates the first draw could
+not have seen. Reading the progress table below is still safe; the refusal fires
+only when there is something new to write. `--grow` overrides it, and that is a
+second round, to be reported as one.
 
 This already happened twice during M7: once when SP2KP's provincial backfill
 landed, and once when source linking was added (migration 0009). Both are
