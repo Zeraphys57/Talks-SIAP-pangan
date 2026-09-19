@@ -104,6 +104,18 @@ severity level would make every surface read as a warning. Everything else is a
 token in `globals.css` defined once per scheme, which ends by construction the
 class of bug that put `text-neutral-500` on a dark background at 4.17:1.
 
+**Warm, not neutral.** The first cut of this palette was a near-black `#0a0e0c`
+with an emerald accent. That is the vocabulary of a developer tool, and this is
+a national food service — so backgrounds are paper cream, the ink is a warm
+brown-black rather than a blue-black, and the green is a leaf green rather than
+a corporate emerald. The dark scheme is a warm deep brown for the same reason:
+a reader whose phone is set to dark should get the same product at night, not a
+different one.
+
+Warmth is not allowed to cost legibility. Every foreground/background pair in
+both schemes is measured against the 4.5:1 AA floor before it ships; the light
+muted text sits at 5.75:1 and the dark at 7.19:1.
+
 **Colour is never the only signal.** Level is carried by a text label first,
 then an icon shape, then colour. Roughly 8% of men have some red-green colour
 deficiency, and the red/green tone pair is precisely the confusable one. Red and

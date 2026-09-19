@@ -47,8 +47,8 @@ export const viewport: Viewport = {
   // Matches the manifest and the dark background, so the phone's browser chrome
   // stops flashing white before the page paints on a slow connection.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f8f6" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0e0c" },
+    { media: "(prefers-color-scheme: light)", color: "#fbf9f4" },
+    { media: "(prefers-color-scheme: dark)", color: "#1a1713" },
   ],
 };
 

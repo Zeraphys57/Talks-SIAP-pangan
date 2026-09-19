@@ -13,6 +13,14 @@ commercially. The previous pass had improved it from inside the constraints
 `docs/design.md` sets; this one changes the constraints, which is where the
 problem actually was.
 
+**Palette warmed, after review.** The first cut shipped a near-black `#0a0e0c`
+with an emerald accent — the vocabulary of a developer tool, on a national food
+service. Backgrounds are paper cream now, the ink a warm brown-black rather
+than a blue-black, the green a leaf green rather than a corporate emerald, and
+the dark scheme a warm deep brown rather than black. Every foreground pair in
+both schemes was measured against the 4.5:1 AA floor before it shipped rather
+than after: light muted 5.75:1, dark muted 7.19:1, brand on cream 5.92:1.
+
 **Typography.** Plus Jakarta Sans, self-hosted through `next/font`. The rule it
 replaces — system stack, no webfont — rested on one objection: a render-blocking
 request to a third party on a slow connection. `next/font` removes that rather
