@@ -12,7 +12,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { db, fetchCommodity, fetchLastUpdated, fetchRegions } from "@/lib/dashboard";
-import { formatLongDate, formatPercent, formatRupiah, formatShortDateWithYear } from "@/lib/format";
+import {
+  formatLongDate,
+  formatPercent,
+  formatPercentMagnitude,
+  formatRupiah,
+  formatShortDate,
+  formatShortDateWithYear,
+  formatWeekRange,
+} from "@/lib/format";
 import {
   COPY,
   LEVEL_LABEL,
@@ -25,7 +33,21 @@ import {
 } from "@/content/id";
 import PriceChart from "@/components/PriceChart";
 import PageFooter from "@/components/PageFooter";
-import { MUTED, PAGE } from "@/lib/ui";
+import { INTERACTION, MUTED, PANEL, PAGE, SECTION_LABEL } from "@/lib/ui";
+
+/**
+ * How this region's price compares with another's.
+ *
+ * Below two percent the answer is "the same": the two figures come from
+ * different portals with different collection methods, and presenting a 1%
+ * gap as a reason to buy elsewhere would be reading noise as signal.
+ */
+function comparison(peerPrice: number, here: number): string {
+  const diff = peerPrice / here - 1;
+  if (Math.abs(diff) < 0.02) return COPY.peerSame;
+  const magnitude = formatPercentMagnitude(diff);
+  return diff < 0 ? COPY.peerCheaper(magnitude) : COPY.peerPricier(magnitude);
+}
 
 export const revalidate = 1800;
 
@@ -99,7 +121,7 @@ export default async function CommodityPage({
         >
           &larr; {detail.regionName}
         </Link>
-        <h1 className="mt-3 text-xl font-semibold tracking-tight">{detail.name}</h1>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight">{detail.name}</h1>
         {detail.obsDate && (
           <p className={`mt-1 text-sm ${MUTED}`}>
             {COPY.dataFrom}: {formatLongDate(detail.obsDate)}
@@ -107,9 +129,9 @@ export default async function CommodityPage({
         )}
       </header>
 
-      <section className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+      <section className={`${PANEL} p-4`}>
         <div className="flex items-baseline justify-between gap-3">
-          <p className="text-2xl font-semibold tabular-nums">
+          <p className="text-3xl font-semibold tabular-nums">
             {formatRupiah(focus?.price ?? null)}
             <span className={`ml-1 text-sm font-normal ${MUTED}`}>/{detail.unit}</span>
           </p>
@@ -157,7 +179,7 @@ export default async function CommodityPage({
       </section>
 
       <section>
-        <h2 className="text-sm font-medium">{COPY.riskyWeeks}</h2>
+        <h2 className={SECTION_LABEL}>{COPY.riskyWeeks}</h2>
         {detail.riskyWeeks.length ? (
           <>
             <ul className="mt-2 flex flex-wrap gap-2">
@@ -166,7 +188,7 @@ export default async function CommodityPage({
                   key={w.week}
                   className="rounded-md border border-neutral-200 px-2 py-1 text-xs tabular-nums dark:border-neutral-800"
                 >
-                  Minggu {w.week}
+                  {formatWeekRange(w.startsOn)}
                 </li>
               ))}
             </ul>
@@ -181,14 +203,57 @@ export default async function CommodityPage({
 
       {zone && (
         <section>
-          <h2 className="text-sm font-medium">{COPY.zoneTitle}</h2>
+          <h2 className={SECTION_LABEL}>{COPY.zoneTitle}</h2>
           <p className="mt-1 text-sm">{zone.label}</p>
           <p className={`mt-1 text-xs leading-relaxed ${MUTED}`}>{zone.meaning}</p>
         </section>
       )}
 
+      {detail.peers.length > 0 && (
+        <section>
+          <h2 className={SECTION_LABEL}>{COPY.peersTitle}</h2>
+          <ul className="mt-2 flex flex-col gap-2">
+            {detail.peers.map((peer) => (
+              <li key={peer.regionSlug}>
+                {/* A link, not a row of text: having learned cabai is cheaper in
+                    Jawa Timur, the next thing the reader wants is that region's
+                    page for it. */}
+                <Link
+                  href={`/wilayah/${peer.regionSlug}/${detail.slug}`}
+                  className={`flex items-center justify-between gap-3 ${PANEL} px-3 py-2 hover:border-neutral-400 dark:hover:border-neutral-600 ${INTERACTION}`}
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{peer.regionName}</span>
+                    {/* Only when it differs from the date this page is showing.
+                        Printing the same date on every row would be noise;
+                        printing none would hide a real mismatch. */}
+                    {peer.obsDate !== detail.obsDate && (
+                      <span className={`block text-xs tabular-nums ${MUTED}`}>
+                        {formatShortDate(peer.obsDate)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-sm font-semibold tabular-nums">
+                      {formatRupiah(peer.price)}
+                      <span className={`ml-1 text-xs font-normal ${MUTED}`}>/{detail.unit}</span>
+                    </span>
+                    {focus?.price != null && (
+                      <span className={`block text-xs ${MUTED}`}>
+                        {comparison(peer.price, focus.price)}
+                      </span>
+                    )}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <p className={`mt-2 text-xs leading-relaxed ${MUTED}`}>{COPY.peersHelp}</p>
+        </section>
+      )}
+
       <section>
-        <h2 className="text-sm font-medium">{COPY.sourcesTitle}</h2>
+        <h2 className={SECTION_LABEL}>{COPY.sourcesTitle}</h2>
         <p className={`mt-1 text-xs leading-relaxed ${MUTED}`}>{COPY.sourcesHelp}</p>
         <ul className="mt-2 flex flex-col gap-2">
           {detail.sources.map((s) => (

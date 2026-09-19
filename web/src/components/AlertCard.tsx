@@ -8,6 +8,12 @@
  * design. Since the levels are named `siaga`/`waspada`/`tenang` rather than by
  * colour, the label no longer leans on the tone to be read at all.
  *
+ * "Text label first" is now true of the layout as well as the encoding. The
+ * label used to sit in a footnote row at the bottom of the card, set in the
+ * smallest muted type on it and sharing a line with the source count — so the
+ * one thing the card exists to say was the last thing on it, and the tone was
+ * doing the work in practice. It leads now.
+ *
  * Direction is stated on every non-green card, because the fusion score is
  * computed on |pct_change_7d| and therefore treats a crash exactly like a
  * spike. For the person reading this those are opposite situations.
@@ -20,13 +26,28 @@ import { formatPercent, formatRupiah } from "@/lib/format";
 import { COPY, LEVEL_LABEL, LEVEL_MARK, alertHeadline, direction } from "@/content/id";
 import { INTERACTION, MUTED } from "@/lib/ui";
 
+/**
+ * Card surface. `siaga` and `waspada` also take a thick left edge: a tint alone
+ * disappears under grayscale printing and under a colour deficiency, and the
+ * paper reproduces these screenshots. The edge is geometry, so it survives both.
+ */
 const TONE: Record<AlertRow["level"], string> = {
-  siaga: "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/30",
-  waspada: "border-amber-300 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30",
+  siaga: "border-red-300 border-l-4 border-l-red-500 bg-red-50 dark:border-red-900 dark:border-l-red-600 dark:bg-red-950/30",
+  waspada:
+    "border-amber-300 border-l-4 border-l-amber-500 bg-amber-50 dark:border-amber-900 dark:border-l-amber-600 dark:bg-amber-950/30",
   tenang: "border-neutral-200 dark:border-neutral-800",
   // Dashed, and no fill: "we could not judge this" should not look like a
   // verdict, and it must not borrow the calm card's styling.
   belum_dapat_dinilai: "border-dashed border-neutral-300 dark:border-neutral-700",
+};
+
+/** The level chip. Readable without the tone; the tone only reinforces it. */
+const CHIP: Record<AlertRow["level"], string> = {
+  siaga: "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200",
+  waspada: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
+  tenang: "bg-neutral-100 text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300",
+  belum_dapat_dinilai:
+    "border border-dashed border-neutral-300 text-neutral-700 dark:border-neutral-700 dark:text-neutral-300",
 };
 
 export default function AlertCard({
@@ -43,8 +64,15 @@ export default function AlertCard({
   return (
     <Link
       href={`/wilayah/${regionSlug}/${alert.commodity_slug}`}
-      className={`block rounded-lg border p-4 ${INTERACTION} ${TONE[alert.level]}`}
+      className={`flex flex-col gap-2 rounded-lg border p-4 ${INTERACTION} ${TONE[alert.level]}`}
     >
+      <span
+        className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${CHIP[alert.level]}`}
+      >
+        <span aria-hidden>{LEVEL_MARK[alert.level]}</span>
+        {LEVEL_LABEL[alert.level]}
+      </span>
+
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           {/* `truncate` protects the single-column phone layout, where every name
@@ -57,7 +85,9 @@ export default function AlertCard({
             {alert.commodity_name}
           </p>
           {!compact && (
-            <p className="mt-0.5 text-sm">{alertHeadline(alert.level, alert.pctChange7d)}</p>
+            <p className={`mt-0.5 text-sm ${MUTED}`}>
+              {alertHeadline(alert.level, alert.pctChange7d)}
+            </p>
           )}
         </div>
         <div className="shrink-0 text-right">
@@ -67,9 +97,7 @@ export default function AlertCard({
                 else per kilogram, so the unit is part of what the number means,
                 not a footnote to it. design.md is explicit that the one number on
                 the page must not be ambiguous. */}
-            <span className={`ml-1 text-sm font-normal ${MUTED}`}>
-              /{alert.canonical_unit}
-            </span>
+            <span className={`ml-1 text-sm font-normal ${MUTED}`}>/{alert.canonical_unit}</span>
           </p>
           {alert.pctChange7d !== null && dir !== "datar" && (
             <p className={`text-sm tabular-nums ${MUTED}`}>
@@ -83,15 +111,7 @@ export default function AlertCard({
         </div>
       </div>
 
-      <div className={`mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs ${MUTED}`}>
-        <span>
-          <span aria-hidden className="mr-1">
-            {LEVEL_MARK[alert.level]}
-          </span>
-          {LEVEL_LABEL[alert.level]}
-        </span>
-        <span>{COPY.sourceCount(alert.nSources)}</span>
-      </div>
+      <p className={`text-xs ${MUTED}`}>{COPY.sourceCount(alert.nSources)}</p>
     </Link>
   );
 }

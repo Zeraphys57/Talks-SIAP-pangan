@@ -20,12 +20,14 @@
  */
 export const MUTED = "text-neutral-600 dark:text-neutral-400";
 
-// There is deliberately no BORDER token. `border-neutral-200 … dark:border-
-// neutral-800` appears nine times, but always interleaved with per-use spacing
-// (`p-4`, `px-3 py-2`, `px-2 py-1`), so one constant cannot express it without
-// also dictating padding. More to the point, all nine already agree — unlike the
-// muted colour, there is no divergence to fix, and a token nobody uses is worse
-// than no token.
+// There is still deliberately no bare BORDER token — see PANEL below, which is
+// the border pair *and* the radius, the two that always travel together. The
+// original note here argued against a token on the grounds that padding varies
+// per use and that all nine existing uses already agreed. The first half still
+// holds and PANEL respects it by carrying no padding. The second half was an
+// argument against tokenising something with no divergence to fix; what changed
+// is the count, not the reasoning. At fourteen surfaces across five files the
+// risk is no longer divergence today but drift on the next edit.
 
 /**
  * Touch and keyboard affordance for anything tappable.
@@ -39,6 +41,38 @@ export const MUTED = "text-neutral-600 dark:text-neutral-400";
 export const INTERACTION =
   "transition-transform active:scale-[0.99] motion-reduce:transition-none " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current";
+
+/**
+ * Section headings, in two weights — because there are two kinds of section and
+ * they were being written six different ways.
+ *
+ * Every `<h2>` on the public pages was `text-sm font-medium`, sometimes muted
+ * and sometimes not, which is the same size and weight as the body text beneath
+ * it. Nothing announced itself as structure, so a page read as one flat column
+ * of small text and the reader had to parse the wording to find the seams.
+ *
+ * `SECTION_LABEL` is the quiet kind: a name for a group the reader is scanning
+ * past ("Bergerak wajar", "Sumber data"). Smaller than body text but set in
+ * caps with tracking, so it reads as a label rather than as a sentence — the
+ * distinction body-sized medium weight could not make.
+ *
+ * `SECTION_TITLE` is for the one section that is the point of the page. On the
+ * board that is "Perlu diperhatikan"; giving it real size is what makes the
+ * split design.md argues for visible at a glance instead of inferable.
+ */
+export const SECTION_LABEL = `text-xs font-semibold uppercase tracking-wider ${MUTED}`;
+export const SECTION_TITLE = "text-base font-semibold tracking-tight";
+
+/**
+ * A bordered surface. Radius and border only — padding stays at the call site.
+ *
+ * The note below explains why there is no BORDER token; this is not that. The
+ * border pair and the radius always travel together and now appear on fourteen
+ * surfaces across five files, while the padding genuinely differs (`p-4`,
+ * `px-3 py-2`, `px-2 py-1`). Splitting it exactly there is what lets one
+ * constant hold without dictating spacing.
+ */
+export const PANEL = "rounded-lg border border-neutral-200 dark:border-neutral-800";
 
 /**
  * Page shells. One column on a phone in every case — that is the layout design.md

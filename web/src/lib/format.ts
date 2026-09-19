@@ -60,6 +60,32 @@ export function formatShortDateWithYear(iso: string): string {
   return shortDateWithYear.format(localDate(iso));
 }
 
+const monthShort = new Intl.DateTimeFormat("id-ID", { month: "short" });
+
+/**
+ * The calendar week an ISO week number actually refers to: "24–30 Mar".
+ *
+ * `seasonal_components` is computed weekly, so a risky period is identified by
+ * its ISO week number — and the commodity page was rendering that number raw,
+ * as "Minggu 13". Nobody buying cabai thinks in ISO weeks; the number is an
+ * artefact of how the decomposition is indexed, not information about when to
+ * expect a price rise. `startsOn` was already being fetched alongside it and
+ * thrown away at the component.
+ *
+ * No year, deliberately. This is a pattern that recurs annually, so naming one
+ * specific March would read as a claim about that year. The consequence is that
+ * the dates shift by a few days between years, which the caption states.
+ */
+export function formatWeekRange(startsOnIso: string): string {
+  const start = localDate(startsOnIso);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
+
+  return start.getMonth() === end.getMonth()
+    ? `${start.getDate()}–${end.getDate()} ${monthShort.format(end)}`
+    : `${start.getDate()} ${monthShort.format(start)} – ${end.getDate()} ${monthShort.format(end)}`;
+}
+
 /**
  * When the pipeline last finished, as day, date and clock time in WIB.
  *
@@ -85,6 +111,19 @@ const updatedAt = new Intl.DateTimeFormat("id-ID", {
 
 export function formatUpdatedAt(iso: string): string {
   return `${updatedAt.format(new Date(iso))} WIB`;
+}
+
+/**
+ * Unsigned, whole-number percentage, e.g. "8%".
+ *
+ * For differences whose direction is carried by the words around them — "8%
+ * lebih murah". A signed "-8%" beside "lebih murah" states the direction twice
+ * and invites the reader to wonder whether the two disagree. Whole numbers
+ * because a tenth of a percent is below the resolution at which anyone decides
+ * which market to buy from.
+ */
+export function formatPercentMagnitude(fraction: number): string {
+  return `${Math.round(Math.abs(fraction) * 100)}%`;
 }
 
 /** Signed percentage, e.g. "+12,4%". Indonesian uses a comma for decimals. */
