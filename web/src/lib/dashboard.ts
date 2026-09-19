@@ -304,6 +304,58 @@ async function fetchPricesOn(regionId: number, obsDate: string): Promise<Map<str
   return out;
 }
 
+export type SiteStats = {
+  commodities: number;
+  regions: number;
+  sources: number;
+  /** Days of real, non-interpolated price on record across every series. */
+  observations: number;
+  /** Earliest observation date, or null if there is none. */
+  since: string | null;
+};
+
+/**
+ * The numbers the front page puts its name to.
+ *
+ * Every one is counted from the database at build time. None of them is a user
+ * count, a rating or a testimonial, because this project has no users to count
+ * and inventing any of those would be the one thing a page about data integrity
+ * cannot do. What it can honestly claim is its own coverage, so that is what it
+ * claims.
+ *
+ * `observations` excludes interpolated days on purpose: a filled gap is not a
+ * recorded price, and the headline figure has to mean what it says.
+ */
+export async function fetchStats(): Promise<SiteStats> {
+  const [commodities, regions, sources, observations, earliest] = await Promise.all([
+    db.from("commodities").select("id", { count: "exact", head: true }),
+    fetchRegions(),
+    // `trends` is active but is not one of these. engine/config/sources.yaml
+    // states it outright — "Demand-proxy signal only, never a price source" —
+    // and counting it would put "5 portal resmi" under a heading about official
+    // price portals when only four of them publish a price.
+    db
+      .from("sources")
+      .select("slug", { count: "exact", head: true })
+      .eq("is_active", true)
+      .neq("slug", "trends"),
+    db
+      .from("price_daily_unified")
+      .select("commodity_id", { count: "exact", head: true })
+      .eq("is_imputed", false)
+      .not("price_median", "is", null),
+    db.from("price_daily_unified").select("obs_date").order("obs_date").limit(1),
+  ]);
+
+  return {
+    commodities: commodities.count ?? 0,
+    regions: regions.length,
+    sources: sources.count ?? 0,
+    observations: observations.count ?? 0,
+    since: (earliest.data?.[0]?.obs_date as string | undefined) ?? null,
+  };
+}
+
 export type RegionSummary = Region & {
   /** Latest settled date for this region, or null if it has none. */
   obsDate: string | null;
@@ -312,6 +364,8 @@ export type RegionSummary = Region & {
   unjudged: number;
   /** Highest-scoring commodity needing attention — a name to put on the card. */
   topCommodity: string | null;
+  /** That commodity's slug, so the card can show its mark. */
+  topSlug: string | null;
 };
 
 /**
@@ -338,6 +392,7 @@ export async function fetchRegionSummaries(): Promise<RegionSummary[]> {
     calm: 0,
     unjudged: 0,
     topCommodity: null,
+    topSlug: null,
   });
 
   if (runId === null) return regions.map(empty);
@@ -350,7 +405,7 @@ export async function fetchRegionSummaries(): Promise<RegionSummary[]> {
 
       const { data, error } = await db
         .from("alerts")
-        .select("level, fusion_score, commodities(display_name)")
+        .select("level, fusion_score, commodities(slug, display_name)")
         .eq("run_id", runId)
         .eq("region_id", region.id)
         .eq("obs_date", obsDate)
@@ -359,7 +414,7 @@ export async function fetchRegionSummaries(): Promise<RegionSummary[]> {
 
       const rows = (data ?? []) as unknown as {
         level: Level;
-        commodities: { display_name: string } | null;
+        commodities: { slug: string; display_name: string } | null;
       }[];
       const attention = rows.filter((r) => r.level === "siaga" || r.level === "waspada");
 
@@ -370,6 +425,7 @@ export async function fetchRegionSummaries(): Promise<RegionSummary[]> {
         calm: rows.filter((r) => r.level === "tenang").length,
         unjudged: rows.filter((r) => r.level === "belum_dapat_dinilai").length,
         topCommodity: attention[0]?.commodities?.display_name ?? null,
+        topSlug: attention[0]?.commodities?.slug ?? null,
       };
     }),
   );

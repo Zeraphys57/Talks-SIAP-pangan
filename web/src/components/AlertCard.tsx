@@ -24,6 +24,7 @@ import Link from "next/link";
 import type { AlertRow } from "@/lib/dashboard";
 import { formatPercent, formatRupiah } from "@/lib/format";
 import { COPY, LEVEL_LABEL, LEVEL_MARK, alertHeadline, direction } from "@/content/id";
+import CommodityIcon from "@/components/CommodityIcon";
 import { INTERACTION, MUTED } from "@/lib/ui";
 
 /**
@@ -32,22 +33,21 @@ import { INTERACTION, MUTED } from "@/lib/ui";
  * paper reproduces these screenshots. The edge is geometry, so it survives both.
  */
 const TONE: Record<AlertRow["level"], string> = {
-  siaga: "border-red-300 border-l-4 border-l-red-500 bg-red-50 dark:border-red-900 dark:border-l-red-600 dark:bg-red-950/30",
+  siaga: "border-red-300 border-l-4 border-l-red-500 bg-red-50 dark:border-red-900/70 dark:border-l-red-600 dark:bg-red-950/30",
   waspada:
-    "border-amber-300 border-l-4 border-l-amber-500 bg-amber-50 dark:border-amber-900 dark:border-l-amber-600 dark:bg-amber-950/30",
-  tenang: "border-neutral-200 dark:border-neutral-800",
+    "border-amber-300 border-l-4 border-l-amber-500 bg-amber-50 dark:border-amber-900/70 dark:border-l-amber-600 dark:bg-amber-950/30",
+  tenang: "border-edge bg-surface",
   // Dashed, and no fill: "we could not judge this" should not look like a
   // verdict, and it must not borrow the calm card's styling.
-  belum_dapat_dinilai: "border-dashed border-neutral-300 dark:border-neutral-700",
+  belum_dapat_dinilai: "border-dashed border-edge-strong",
 };
 
 /** The level chip. Readable without the tone; the tone only reinforces it. */
 const CHIP: Record<AlertRow["level"], string> = {
   siaga: "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200",
   waspada: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
-  tenang: "bg-neutral-100 text-neutral-700 dark:bg-neutral-900 dark:text-neutral-300",
-  belum_dapat_dinilai:
-    "border border-dashed border-neutral-300 text-neutral-700 dark:border-neutral-700 dark:text-neutral-300",
+  tenang: "bg-surface-muted text-ink-muted",
+  belum_dapat_dinilai: "border border-dashed border-edge-strong text-ink-muted",
 };
 
 export default function AlertCard({
@@ -64,34 +64,38 @@ export default function AlertCard({
   return (
     <Link
       href={`/wilayah/${regionSlug}/${alert.commodity_slug}`}
-      className={`flex flex-col gap-2 rounded-lg border p-4 ${INTERACTION} ${TONE[alert.level]}`}
+      className={`flex flex-col gap-2.5 rounded-2xl border p-4 shadow-card hover:shadow-raised ${INTERACTION} ${TONE[alert.level]}`}
     >
       <span
-        className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${CHIP[alert.level]}`}
+        className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${CHIP[alert.level]}`}
       >
         <span aria-hidden>{LEVEL_MARK[alert.level]}</span>
         {LEVEL_LABEL[alert.level]}
       </span>
 
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          {/* `truncate` protects the single-column phone layout, where every name
-              in the catalogue happens to fit. In a multi-column grid the card is
-              narrower than it is on a phone, and truncating turned "Minyak goreng
-              kemasan" into "Minyak goreng kema…" — the one word that distinguishes
-              it from the curah variety on the same board. Above `sm` the name
-              wraps instead; a taller card costs nothing, a hidden name does. */}
-          <p className="truncate text-base font-medium sm:overflow-visible sm:whitespace-normal">
-            {alert.commodity_name}
-          </p>
-          {!compact && (
-            <p className={`mt-0.5 text-sm ${MUTED}`}>
-              {alertHeadline(alert.level, alert.pctChange7d)}
+        <div className="flex min-w-0 items-start gap-2.5">
+          <CommodityIcon slug={alert.commodity_slug} className="mt-0.5 h-5 w-5 shrink-0" />
+          <div className="min-w-0">
+            {/* `truncate` protects the single-column phone layout, where every
+                name in the catalogue happens to fit. In a multi-column grid the
+                card is narrower than it is on a phone, and truncating turned
+                "Minyak goreng kemasan" into "Minyak goreng kema…" — the one word
+                that distinguishes it from the curah variety on the same board.
+                Above `sm` the name wraps instead; a taller card costs nothing, a
+                hidden name does. */}
+            <p className="truncate text-base font-bold sm:overflow-visible sm:whitespace-normal">
+              {alert.commodity_name}
             </p>
-          )}
+            {!compact && (
+              <p className={`mt-0.5 text-sm ${MUTED}`}>
+                {alertHeadline(alert.level, alert.pctChange7d)}
+              </p>
+            )}
+          </div>
         </div>
         <div className="shrink-0 text-right">
-          <p className="text-base font-semibold tabular-nums">
+          <p className="text-base font-bold tabular-nums">
             {formatRupiah(alert.price)}
             {/* Not text-xs: minyak goreng is priced per litre and everything
                 else per kilogram, so the unit is part of what the number means,

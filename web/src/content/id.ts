@@ -144,6 +144,59 @@ export const COPY = {
   appName: "SIAP-PANGAN",
   tagline: "Pantau harga bahan pangan dari sumber resmi",
 
+  // ---- Landing ------------------------------------------------------------
+  // Every claim here has to survive being checked against the system. No user
+  // counts, no testimonials, no "dipercaya oleh" — this project has no users to
+  // count, and a page whose subject is data integrity cannot open by inventing
+  // some. The numbers in the stat strip are read from the database at build
+  // time; the credibility on offer is the four government portals, which are
+  // real and linked.
+  navCta: "Lihat harga",
+
+  heroEyebrow: "Data dari portal resmi pemerintah",
+  heroTitle: "Tahu bahan mana yang harganya bergerak tidak wajar",
+  heroBody:
+    "Harga pangan naik-turun setiap hari, dan tidak semuanya berarti sesuatu. SIAP-PANGAN membandingkan harga hari ini dengan kebiasaan bahan itu sendiri, lalu menandai yang benar-benar keluar dari pola.",
+  heroCta: "Lihat harga di wilayah saya",
+  heroSecondary: "Lihat sumber datanya",
+  // Sits directly under the buttons, not in the footer. It is the boundary the
+  // whole system is built inside, and burying it would be the beginning of
+  // overselling.
+  heroBoundary: "Menjelaskan apa yang sudah terjadi. Tidak meramal harga besok.",
+
+  statCommodities: "bahan pangan",
+  statRegions: "wilayah",
+  statSources: "portal resmi",
+  statObservations: "hari harga tercatat",
+  statSince: (date: string) => `sejak ${date}`,
+
+  liveTitle: "Kondisi terakhir",
+  liveBody:
+    "Angka di bawah ini bukan contoh. Ini keadaan sebenarnya pada hari terakhir yang datanya sudah final.",
+
+  howTitle: "Cara kerjanya",
+  howSteps: [
+    {
+      title: "Dikumpulkan tiap hari",
+      body: "Harga diambil otomatis dari empat portal resmi. Kalau satu portal gagal diambil, harinya dibiarkan kosong dan kegagalannya dicatat — tidak ada angka yang dikarang untuk menutupi lubang.",
+    },
+    {
+      title: "Dibandingkan dengan kebiasaannya",
+      body: "Tiap bahan dinilai terhadap polanya sendiri, bukan terhadap bahan lain. Cabai yang naik 10% itu biasa; beras yang naik 10% tidak.",
+    },
+    {
+      title: "Disimpulkan jadi satu tingkat",
+      body: "Beberapa metode dijalankan berdampingan, lalu hasilnya digabung jadi satu penilaian per bahan. Kalau datanya tidak cukup untuk menilai, sistem mengatakan begitu — bukan mengatakan harganya wajar.",
+    },
+  ],
+
+  trustTitle: "Setiap angka bisa ditelusuri",
+  trustBody:
+    "Tidak ada angka di sistem ini yang tidak punya asal. Setiap harga bisa ditelusuri kembali ke portal, tanggal, dan waktu pengambilannya.",
+
+  closingTitle: "Mulai dari wilayah Anda",
+  closingBody: "Gratis, tanpa akun, tanpa aplikasi yang perlu dipasang.",
+
   chooseRegion: "Pilih wilayah",
   regionHint: "Harga berbeda antar daerah. Pilih yang paling dekat dengan pasar Anda.",
 

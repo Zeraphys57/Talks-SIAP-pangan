@@ -33,6 +33,8 @@ import {
 } from "@/content/id";
 import PriceChart from "@/components/PriceChart";
 import PageFooter from "@/components/PageFooter";
+import SiteHeader from "@/components/SiteHeader";
+import CommodityIcon from "@/components/CommodityIcon";
 import { INTERACTION, MUTED, PANEL, PAGE, SECTION_LABEL } from "@/lib/ui";
 
 /**
@@ -113,15 +115,20 @@ export default async function CommodityPage({
   // 1000px. The chart is a viewBox SVG at w-full, so it takes the extra width as
   // detail rather than as stretch.
   return (
-    <main className={PAGE.reading}>
+    <>
+      <SiteHeader cta={false} />
+      <main className={PAGE.reading}>
       <header>
         <Link
           href={`/wilayah/${region}`}
-          className={`text-sm ${MUTED} underline underline-offset-2`}
+          className={`text-sm font-medium ${MUTED} hover:text-brand`}
         >
           &larr; {detail.regionName}
         </Link>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight">{detail.name}</h1>
+        <h1 className="mt-3 flex items-center gap-2.5 text-2xl font-extrabold tracking-tight sm:text-3xl">
+          <CommodityIcon slug={detail.slug} className="h-7 w-7 shrink-0 text-brand" />
+          {detail.name}
+        </h1>
         {detail.obsDate && (
           <p className={`mt-1 text-sm ${MUTED}`}>
             {COPY.dataFrom}: {formatLongDate(detail.obsDate)}
@@ -164,7 +171,7 @@ export default async function CommodityPage({
               <p className={`mt-2 text-xs ${MUTED}`}>{REASON_COPY[alert.reason]}</p>
             )}
             {advice && (
-              <p className="mt-3 rounded-md bg-neutral-100 px-3 py-2 text-sm dark:bg-neutral-900">
+              <p className="mt-3 rounded-xl border border-brand-soft-border bg-brand-soft px-3.5 py-2.5 text-sm">
                 {advice}
               </p>
             )}
@@ -186,7 +193,7 @@ export default async function CommodityPage({
               {detail.riskyWeeks.map((w) => (
                 <li
                   key={w.week}
-                  className="rounded-md border border-neutral-200 px-2 py-1 text-xs tabular-nums dark:border-neutral-800"
+                  className="rounded-lg border border-edge bg-surface px-2.5 py-1 text-xs font-medium tabular-nums"
                 >
                   {formatWeekRange(w.startsOn)}
                 </li>
@@ -259,7 +266,7 @@ export default async function CommodityPage({
           {detail.sources.map((s) => (
             <li
               key={s.source_slug}
-              className="rounded-md border border-neutral-200 px-3 py-2 text-xs dark:border-neutral-800"
+              className={`${PANEL} px-3.5 py-2.5 text-xs`}
             >
               <a
                 href={s.base_url}
@@ -280,6 +287,7 @@ export default async function CommodityPage({
       </section>
 
       <PageFooter lastUpdated={lastUpdated} />
-    </main>
+      </main>
+    </>
   );
 }

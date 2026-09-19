@@ -83,9 +83,26 @@ day's data.
 
 ## Visual direction
 
-**Type.** System stack. No webfont. A webfont is a render-blocking network
-request on a slow connection, bought for an aesthetic this audience did not ask
-for. Numbers use tabular figures so a column of prices aligns.
+**Type.** Plus Jakarta Sans, self-hosted through `next/font`, with the system
+stack behind it. Numbers use tabular figures so a column of prices aligns.
+
+This reverses the rule that stood here until the product was reframed as
+commercial. The old rule — system stack, no webfont — rested on one specific
+objection: *a webfont is a render-blocking request to a third party on a slow
+connection*. That objection was correct, and `next/font` removes it rather than
+overruling it. The face is fetched at build time and served from this origin,
+preloaded, with no runtime connection to Google; `display: swap` paints text in
+the system stack immediately, so a slow or failed font costs legibility nothing.
+What remains is the byte cost, which is the trade the reframing accepted.
+
+Plus Jakarta Sans specifically because it is commissioned Indonesian type, which
+is a reason to prefer it over the usual product-sans defaults for this subject.
+
+**Colour, now that there is some.** A brand green, never red or amber. Those two
+belong to `siaga` and `waspada`, and a brand colour that collided with a
+severity level would make every surface read as a warning. Everything else is a
+token in `globals.css` defined once per scheme, which ends by construction the
+class of bug that put `text-neutral-500` on a dark background at 4.17:1.
 
 **Colour is never the only signal.** Level is carried by a text label first,
 then an icon shape, then colour. Roughly 8% of men have some red-green colour
@@ -99,8 +116,8 @@ word, so "the text carries the meaning" was true only for a reader who already
 knew what the colour meant. The names now escalate in plain Indonesian, and the
 tones are decoration.
 
-The stack itself lives in `globals.css`. It is worth saying that it was written
-down here long before it was true: the CSS carried `font-family: Arial` and an
+Worth recording about the rule this replaced: it was written down here long
+before it was ever true. the CSS carried `font-family: Arial` and an
 undefined `--font-geist-sans` left over from `create-next-app`, so the rule
 above described an intention rather than the product. Arial is not the system
 stack — it is one specific face, which Android substitutes and macOS maps to
@@ -142,6 +159,32 @@ not a real property of the product.
 
 The commodity page names the sources for that specific series, because coverage
 differs — East Java has three sources, Kota Yogyakarta has one.
+
+## The landing page, and what it may claim
+
+`/` is a landing page; the region chooser it replaced moved to `/wilayah`.
+
+The constraint that shapes it is what it is **not** allowed to say. There are no
+testimonials, no user counts, no "dipercaya oleh" row of logos and no adoption
+figures, because this project has none of those and a page whose subject is data
+integrity cannot open by inventing some. Everything numeric on it is counted
+from the database at build time, and the four government portals are the
+credibility on offer because they are real and linked.
+
+Two rules the page inherits rather than relaxes:
+
+- **The scope boundary sits under the hero buttons, not in the footer.**
+  Descriptive, never a forecast, is the boundary the whole system is built
+  inside. Burying it is where overselling would start.
+- **A count may only be shown where something was assessable.** The live region
+  cards render `—` rather than `0` when every commodity landed in
+  `belum_dapat_dinilai`. "0 perlu diperhatikan" would claim the region had been
+  checked and found clean, which is the precise reading the fourth level exists
+  to prevent — the same trap as "semua bahan bergerak wajar", in a different
+  shape.
+
+The commodity marks are decoration and are `aria-hidden`. The name is beside
+every one of them, so nobody has to recognise a glyph to tell cabai from bawang.
 
 ## What is deliberately absent
 

@@ -1,48 +1,144 @@
 @import "tailwindcss";
 
 /**
- * Typography: the system stack docs/design.md actually specifies.
+ * Design tokens.
  *
- * This file used to carry `font-family: Arial, Helvetica, sans-serif` and a
- * `--font-geist-sans` that was never defined — both left over from
- * create-next-app. design.md §"Visual direction" says "System stack. No
- * webfont", and layout.tsx said the choice would be made in M8. M8 shipped, the
- * decision was written down, and the CSS was never changed to match it.
+ * The austerity this file used to encode was a deliberate position — system
+ * font, no colour beyond the alert levels, flat surfaces — argued in
+ * docs/design.md on the grounds that the audience is a warung owner on an
+ * entry-level Android over mobile data. The product is now presented
+ * commercially, so the position changed. What did not change: the alert levels
+ * still never depend on colour alone, and nothing here is allowed to make a
+ * number ambiguous.
  *
- * Arial is not the system stack. It is one specific font that Windows has,
- * macOS maps to Helvetica, and Android substitutes — so the page rendered in a
- * 1982 print face instead of the interface font the reader's device uses
- * everywhere else. `system-ui` first resolves to Segoe UI Variable, SF Pro and
- * Roboto respectively, which is both better fitted to a UI and free: no
- * webfont, no render-blocking fetch, nothing added to the mobile-data budget
- * this project optimises for.
+ * Brand green, not red or amber. Those two are spoken for by `siaga` and
+ * `waspada`, and a brand colour that collides with a severity level would make
+ * every surface look like a warning.
  *
- * Arial stays late in the list as the fallback it always was.
+ * Contrast measured against the surface each pair actually lands on; the muted
+ * foreground clears 4.5:1 in both schemes, which is the floor the old
+ * `text-neutral-500` bug failed.
  */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
 
-  --font-system:
-    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-    "Noto Sans", sans-serif;
-}
+  --background: #f7f8f6;
+  --surface: #ffffff;
+  --surface-muted: #f1f3ef;
+  --surface-raised: #ffffff;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-system);
+  --foreground: #12171a;
+  --foreground-muted: #57626c;
+  --foreground-subtle: #79848d;
+
+  --border: #e4e8e2;
+  --border-strong: #cfd6cb;
+
+  --brand: #14653f;
+  --brand-hover: #0f4f31;
+  --brand-soft: #e7f2eb;
+  --brand-soft-border: #bfdccc;
+  --brand-on: #ffffff;
+
+  --shadow-sm: 0 1px 2px rgb(15 30 22 / 0.05), 0 1px 3px rgb(15 30 22 / 0.04);
+  --shadow-md: 0 2px 6px rgb(15 30 22 / 0.05), 0 10px 24px rgb(15 30 22 / 0.07);
+  --shadow-lg: 0 4px 10px rgb(15 30 22 / 0.06), 0 24px 56px rgb(15 30 22 / 0.11);
+
+  /* Plus Jakarta Sans is commissioned Indonesian type — a fit for the subject
+     rather than a default. next/font self-hosts it at build time, so it costs
+     no third-party request at runtime; the system stack behind it is what
+     renders during swap and on a failed load. */
+  --font-app:
+    var(--font-jakarta), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    color-scheme: dark;
+
+    --background: #0a0e0c;
+    --surface: #121815;
+    --surface-muted: #171e1a;
+    --surface-raised: #1a221d;
+
+    --foreground: #e9eeea;
+    --foreground-muted: #9ba79f;
+    --foreground-subtle: #7d8a82;
+
+    --border: #222b26;
+    --border-strong: #35413a;
+
+    --brand: #3fc98a;
+    --brand-hover: #5bd79d;
+    --brand-soft: #10231a;
+    --brand-soft-border: #1e4534;
+    --brand-on: #05170e;
+
+    --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+    --shadow-md: 0 2px 6px rgb(0 0 0 / 0.45), 0 10px 24px rgb(0 0 0 / 0.5);
+    --shadow-lg: 0 4px 10px rgb(0 0 0 / 0.5), 0 24px 56px rgb(0 0 0 / 0.6);
   }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-surface-raised: var(--surface-raised);
+
+  --color-ink: var(--foreground);
+  --color-ink-muted: var(--foreground-muted);
+  --color-ink-subtle: var(--foreground-subtle);
+
+  --color-edge: var(--border);
+  --color-edge-strong: var(--border-strong);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-soft-border: var(--brand-soft-border);
+  --color-brand-on: var(--brand-on);
+
+  --shadow-card: var(--shadow-sm);
+  --shadow-raised: var(--shadow-md);
+  --shadow-float: var(--shadow-lg);
+
+  --font-sans: var(--font-app);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-system);
+  font-family: var(--font-app);
+  /* Jakarta's default figures are proportional; prices sit in tables and
+     columns throughout, so lining figures are the correct default here. */
+  font-variant-numeric: lining-nums;
+}
+
+/* The hero's backdrop. A single soft wash rather than an image: it survives
+   both schemes, costs no bytes, and cannot be mistaken for a photograph of
+   produce this project does not own the rights to. */
+.hero-wash {
+  background:
+    radial-gradient(80rem 40rem at 15% -10%, color-mix(in oklab, var(--brand) 14%, transparent), transparent 60%),
+    radial-gradient(60rem 30rem at 95% 0%, color-mix(in oklab, var(--brand) 9%, transparent), transparent 55%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .rise {
+    animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
