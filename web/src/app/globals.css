@@ -11,6 +11,14 @@
  * still never depend on colour alone, and nothing here is allowed to make a
  * number ambiguous.
  *
+ * Warm, not neutral. The first cut of this palette was a near-black #0a0e0c
+ * with an emerald accent, which is the vocabulary of a developer tool — and
+ * this is a national food service. Backgrounds are paper cream, the ink is a
+ * warm brown-black rather than a blue-black, and the green is a leaf green
+ * rather than a corporate emerald. The dark scheme is a warm deep brown, not
+ * black; a reader whose phone is set to dark at night should not be handed a
+ * different product.
+ *
  * Brand green, not red or amber. Those two are spoken for by `siaga` and
  * `waspada`, and a brand colour that collides with a severity level would make
  * every surface look like a warning.
@@ -23,27 +31,27 @@
 :root {
   color-scheme: light;
 
-  --background: #f7f8f6;
+  --background: #fbf9f4;
   --surface: #ffffff;
-  --surface-muted: #f1f3ef;
+  --surface-muted: #f3efe6;
   --surface-raised: #ffffff;
 
-  --foreground: #12171a;
-  --foreground-muted: #57626c;
-  --foreground-subtle: #79848d;
+  --foreground: #2a2520;
+  --foreground-muted: #6b6157;
+  --foreground-subtle: #736a5f;
 
-  --border: #e4e8e2;
-  --border-strong: #cfd6cb;
+  --border: #e7e0d3;
+  --border-strong: #d2c8b6;
 
-  --brand: #14653f;
-  --brand-hover: #0f4f31;
-  --brand-soft: #e7f2eb;
-  --brand-soft-border: #bfdccc;
+  --brand: #2f6d3c;
+  --brand-hover: #255831;
+  --brand-soft: #e9f1e4;
+  --brand-soft-border: #c6d9bd;
   --brand-on: #ffffff;
 
-  --shadow-sm: 0 1px 2px rgb(15 30 22 / 0.05), 0 1px 3px rgb(15 30 22 / 0.04);
-  --shadow-md: 0 2px 6px rgb(15 30 22 / 0.05), 0 10px 24px rgb(15 30 22 / 0.07);
-  --shadow-lg: 0 4px 10px rgb(15 30 22 / 0.06), 0 24px 56px rgb(15 30 22 / 0.11);
+  --shadow-sm: 0 1px 2px rgb(60 45 25 / 0.05), 0 1px 3px rgb(60 45 25 / 0.04);
+  --shadow-md: 0 2px 6px rgb(60 45 25 / 0.05), 0 10px 24px rgb(60 45 25 / 0.07);
+  --shadow-lg: 0 4px 10px rgb(60 45 25 / 0.06), 0 24px 56px rgb(60 45 25 / 0.11);
 
   /* Plus Jakarta Sans is commissioned Indonesian type — a fit for the subject
      rather than a default. next/font self-hosts it at build time, so it costs
@@ -58,23 +66,23 @@
   :root {
     color-scheme: dark;
 
-    --background: #0a0e0c;
-    --surface: #121815;
-    --surface-muted: #171e1a;
-    --surface-raised: #1a221d;
+    --background: #1a1713;
+    --surface: #221e19;
+    --surface-muted: #262119;
+    --surface-raised: #2a251e;
 
-    --foreground: #e9eeea;
-    --foreground-muted: #9ba79f;
-    --foreground-subtle: #7d8a82;
+    --foreground: #f0ebe3;
+    --foreground-muted: #ada396;
+    --foreground-subtle: #9a9083;
 
-    --border: #222b26;
-    --border-strong: #35413a;
+    --border: #332d24;
+    --border-strong: #4a4234;
 
-    --brand: #3fc98a;
-    --brand-hover: #5bd79d;
-    --brand-soft: #10231a;
-    --brand-soft-border: #1e4534;
-    --brand-on: #05170e;
+    --brand: #7cc08a;
+    --brand-hover: #93cf9e;
+    --brand-soft: #1e2a19;
+    --brand-soft-border: #35452c;
+    --brand-on: #12210f;
 
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
     --shadow-md: 0 2px 6px rgb(0 0 0 / 0.45), 0 10px 24px rgb(0 0 0 / 0.5);
