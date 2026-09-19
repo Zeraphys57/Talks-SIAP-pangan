@@ -1,10 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
-// Typography is deliberately left as the system stack for now. The display /
-// body / mono pairing is a design decision that belongs in docs/design.md and
-// is made in M8 — picking a webfont here would prejudge it, and would add a
-// build-time network fetch for no benefit.
+// Typography is the system stack, and the decision is now recorded in
+// docs/design.md §"Visual direction" rather than deferred: no webfont, so no
+// render-blocking fetch on mobile data. The stack itself lives in globals.css —
+// this file loads no font module on purpose.
 
 const DESCRIPTION =
   "Pantau harga bahan pangan dari sumber resmi. Tahu bahan mana yang sedang naik tidak wajar.";

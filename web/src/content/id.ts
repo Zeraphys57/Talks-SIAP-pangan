@@ -147,6 +147,21 @@ export const COPY = {
   chooseRegion: "Pilih wilayah",
   regionHint: "Harga berbeda antar daerah. Pilih yang paling dekat dengan pasar Anda.",
 
+  // Front-page summary, one line per region.
+  //
+  // "perlu diperhatikan" is the same phrase the board uses for the same set, so
+  // the reader meets one vocabulary rather than two. The zero case says the
+  // thing that was actually checked — not "aman", which would be a stronger
+  // claim than a day of settled prices supports.
+  regionAttention: (n: number) => `${n} bahan perlu diperhatikan`,
+  regionAllCalm: "Semua bahan bergerak wajar",
+  // Distinct from regionAllCalm on purpose: nothing was found to be unusual is
+  // not the same statement as nothing could be checked.
+  regionUnjudgedOnly: "Belum cukup data untuk dinilai",
+  regionNoData: "Belum ada data",
+  /** "Cabai rawit merah" / "Cabai rawit merah +2". */
+  regionTop: (name: string, others: number) => (others > 0 ? `${name} +${others}` : name),
+
   dataFrom: "Data terakhir",
   noData: "Belum ada data untuk wilayah ini",
   noDataHelp:
@@ -171,11 +186,25 @@ export const COPY = {
   imputedNote: "Titik kosong berarti harga hari itu diisi perkiraan dari hari sebelum dan sesudahnya, bukan hasil pencatatan.",
 
   riskyWeeks: "Periode rawan naik",
+  // Says the dates shift, because they do: the underlying unit is an ISO week
+  // number, and the same week falls on slightly different dates each year.
+  // Rendering the range without that caveat would promise a precision the
+  // decomposition does not have.
   riskyWeeksHelp:
-    "Minggu-minggu yang secara historis harganya di atas kebiasaan tahunan bahan ini. Ini catatan dari data tahun-tahun lalu, bukan ramalan harga.",
+    "Pekan-pekan yang secara historis harganya di atas kebiasaan tahunan bahan ini. Tanggalnya bergeser beberapa hari tiap tahun. Ini catatan dari data tahun-tahun lalu, bukan ramalan harga.",
   noRiskyWeeks: "Belum ada pola musiman yang cukup jelas untuk bahan ini.",
 
   zoneTitle: "Kelompok pergerakan harga",
+
+  // Comparison across regions. Never phrased as a national figure: each row is
+  // one named region's own recorded price, which is the distinction design.md
+  // draws when it rules out presenting an aggregate as the reader's price.
+  peersTitle: "Harga di wilayah lain",
+  peersHelp:
+    "Harga tercatat terakhir untuk bahan yang sama di wilayah lain. Hari terakhir yang tersedia bisa berbeda antar wilayah, jadi tanggalnya ikut ditulis. Hari yang harganya diisi perkiraan tidak dipakai di sini.",
+  peerCheaper: (pct: string) => `${pct} lebih murah`,
+  peerPricier: (pct: string) => `${pct} lebih mahal`,
+  peerSame: "selisih tipis",
 
   sourcesTitle: "Sumber data",
   sourcesHelp:

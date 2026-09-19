@@ -6,6 +6,93 @@ reason, so they can be defended rather than discovered.
 
 ---
 
+## Dashboard revision — typography, hierarchy, and two things the data already held (2026-09-20)
+
+Asked for on two fronts: the dashboard looked unfinished, and it said less than
+it knew.
+
+### The typography rule was written down but never implemented
+
+`docs/design.md` has said "System stack. No webfont" since M8, and
+`layout.tsx` carried a comment saying the choice would be made there. It was
+made, recorded, and never applied: `globals.css` still held
+`font-family: Arial, Helvetica, sans-serif` and a `--font-geist-sans` that was
+never defined — both untouched from `create-next-app`.
+
+Arial is not a system stack. It is one face, which Android substitutes and macOS
+maps to Helvetica, so every reader got a 1982 print font instead of the
+interface font their device uses everywhere else. `system-ui` first costs
+nothing and changes the whole page. The doc was right; only the CSS was wrong.
+
+### Nothing announced itself as structure
+
+Every `<h2>` was `text-sm font-medium` — body size, body weight, muted in some
+files and not in others. `SECTION_LABEL` and `SECTION_TITLE` in `lib/ui.ts` now
+separate a group being scanned past from the section that is the point of the
+page, and the board's "Perlu diperhatikan" carries its count.
+
+The alert card was the sharper case. design.md requires level to be carried by a
+text label first and colour third — but the label sat in a footnote row at the
+bottom of the card, in the smallest muted type on it, sharing a line with the
+source count. The rule was satisfied on paper while the tone did the work in
+practice. The label leads now, as a chip, and `siaga`/`waspada` also take a
+thick left edge: a tint alone does not survive grayscale printing, and these
+screenshots go in the paper.
+
+`PANEL` joins the tokens. The note arguing against a border token still stands
+on its own terms — padding genuinely varies, so `PANEL` carries none — but at
+fourteen surfaces across five files the risk stopped being divergence today and
+became drift on the next edit.
+
+### "Minggu 13" was an index, not information
+
+`seasonal_components` is stored weekly, so a risky period is identified by ISO
+week number, and the commodity page rendered that number raw. `startsOn` was
+already being fetched beside it and discarded at the component. It reads
+"25 Feb – 2 Mar" now. No year, because the pattern recurs annually — and the
+caption says the dates shift a few days between years rather than implying a
+precision the decomposition does not have.
+
+### Two things the product knew and never said
+
+**The front page carried no data at all** — four region names, and a tap spent
+before the reader learned anything. Each now shows that region's own count of
+what needs attention and the commodity leading it. The rule about asking for a
+region first is about *whose* prices are shown; it never required the first
+screen to be empty.
+
+**The same commodity in the other regions** now appears on the commodity page.
+This is not the national aggregate design.md rules out, and the reasoning is in
+a new section there: an Indonesian mean is nobody's price, while four named
+regional prices are each somebody's. A warung near a boundary buys from
+whichever market is cheaper, and the data to answer that has been in the
+database since the first backfill.
+
+Imputed days are excluded from that comparison — the one place an interpolated
+figure would invite a real decision made against a number nobody recorded — and
+each row states its own date when it differs from the page's, because the
+regions do not settle on the same day.
+
+**A bug caught only by looking at it.** The comparison window was first anchored
+to `todayWIB()`, which is correct-looking and wrong: the pipeline was five weeks
+behind the wall clock, so every region fell outside a fourteen-day window and
+the section silently rendered nothing on all 48 pages. Typecheck, lint and a
+full 64-page build all passed with the feature invisible. It is anchored to the
+date the page is showing now, which is the date a comparison has to be against
+anyway.
+
+### Not fixed, and worth stating
+
+At phone width the chart's y-axis labels render at roughly 6px. The SVG has a
+fixed 680-unit viewBox scaled to about 350px, so its 11px text shrinks with it —
+and scaling the text up instead would oversize it on desktop, where the same
+viewBox stretches to 672px. The fix is structural, not a number: either the
+labels move out of the SVG into HTML, or the chart gets a width-aware viewBox.
+That belongs with the per-date baseline pass the module comment already defers,
+and is not attempted here.
+
+---
+
 ## M7 result — the kappa gate failed at 0.1575 (2026-09-19)
 
 Both annotators finished all 399 candidates: A1 over five weeks (2026-08-08 to

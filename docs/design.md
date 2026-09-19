@@ -99,9 +99,31 @@ word, so "the text carries the meaning" was true only for a reader who already
 knew what the colour meant. The names now escalate in plain Indonesian, and the
 tones are decoration.
 
+The stack itself lives in `globals.css`. It is worth saying that it was written
+down here long before it was true: the CSS carried `font-family: Arial` and an
+undefined `--font-geist-sans` left over from `create-next-app`, so the rule
+above described an intention rather than the product. Arial is not the system
+stack — it is one specific face, which Android substitutes and macOS maps to
+Helvetica. `system-ui` resolves to the interface font the reader's device uses
+everywhere else, at the same cost of nothing.
+
+**Two heading weights, because there are two kinds of section.** Every `<h2>`
+used to be `text-sm font-medium` — the same size and weight as the body beneath
+it, sometimes muted and sometimes not — so nothing announced itself as
+structure. `SECTION_LABEL` names a group being scanned past; `SECTION_TITLE` is
+for the one section that is the point of the page, which on the board is "Perlu
+diperhatikan". Both live in `lib/ui.ts`.
+
 **Rupiah in full, never abbreviated.** "Rp 62.500", not "Rp 62,5rb". The
 abbreviation saves a few characters and introduces an ambiguity into the one
 number on the page that must not be ambiguous.
+
+**Seasonal periods are dates, not ISO week numbers.** `seasonal_components` is
+indexed weekly, and the commodity page rendered that index raw as "Minggu 13".
+The week number is an artefact of how the decomposition is stored; nobody buying
+cabai thinks in ISO weeks. It shows "25 Feb – 2 Mar" now, without a year,
+because the pattern recurs annually — and the caption says the dates shift a few
+days between years, which is the cost of dropping the year.
 
 **No chart the eye cannot check.** The commodity chart shows the observed
 series, the 30-day mean, and a shaded band — the same construction the
@@ -129,3 +151,23 @@ differs — East Java has three sources, Kota Yogyakarta has one.
   in scope.
 - Any national aggregate presented as *their* price. `nasional` exists as a
   series but a Yogyakarta warung buys in Yogyakarta.
+
+## What the region rule does not forbid
+
+The commodity page lists the same commodity's most recent recorded price in each
+of the other regions, and the front page gives each region its own count of what
+needs attention. Neither is the aggregate ruled out above, and the distinction
+is worth stating because the two look similar from a distance.
+
+The rule exists because a mean across Indonesia is nobody's price, and offering
+it to a reader as theirs would be a lie about whose number it is. Four named
+regional prices are each somebody's, and each is labelled with whose. A warung
+near a boundary buys from whichever market is cheaper; the project held the data
+to answer that from the first backfill and showed it to no one.
+
+Two constraints come with it. Imputed days are excluded from the comparison —
+this is the one place an interpolated figure would invite a real decision about
+where to buy, made against a number nobody recorded. And each row carries its
+own date when that date differs from the page's, because the regions do not
+settle on the same day and a comparison that hides a two-day gap is not a
+comparison.

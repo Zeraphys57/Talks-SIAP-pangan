@@ -16,7 +16,7 @@ import { COPY } from "@/content/id";
 import PageFooter from "@/components/PageFooter";
 import AlertCard from "@/components/AlertCard";
 import { formatLongDate } from "@/lib/format";
-import { CARD_GRID, MUTED, PAGE } from "@/lib/ui";
+import { CARD_GRID, MUTED, PANEL, PAGE, SECTION_LABEL, SECTION_TITLE } from "@/lib/ui";
 
 export const revalidate = 1800;
 
@@ -63,7 +63,7 @@ export default async function RegionPage({
         <Link href="/" className={`text-sm ${MUTED} underline underline-offset-2`}>
           &larr; {COPY.back}
         </Link>
-        <h1 className="mt-3 text-xl font-semibold tracking-tight">{board.regionName}</h1>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight">{board.regionName}</h1>
         {board.obsDate ? (
           <p className={`mt-1 text-sm ${MUTED}`}>
             {COPY.dataFrom}: {formatLongDate(board.obsDate)}
@@ -78,7 +78,7 @@ export default async function RegionPage({
       )}
 
       {!board.obsDate && (
-        <section className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
+        <section className={`${PANEL} p-4`}>
           <p className="text-sm font-medium">{COPY.noData}</p>
           <p className={`mt-2 text-sm ${MUTED}`}>
             {COPY.noDataHelp}
@@ -88,7 +88,15 @@ export default async function RegionPage({
 
       {attention.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium">{COPY.needsAttention}</h2>
+          {/* The one section that is the point of the page, so it is the one
+              heading set at title weight. The count is here rather than left to
+              be inferred from the grid: "3" is legible before the cards are. */}
+          <h2 className={SECTION_TITLE}>
+            {COPY.needsAttention}
+            <span className={`ml-2 text-sm font-normal tabular-nums ${MUTED}`}>
+              {attention.length}
+            </span>
+          </h2>
           <div className={CARD_GRID}>
             {attention.map((alert) => (
               <AlertCard key={alert.commodity_slug} alert={alert} regionSlug={region} />
@@ -102,14 +110,14 @@ export default async function RegionPage({
           checked. "Semua bahan bergerak wajar" would be the strongest possible
           claim drawn from the weakest possible evidence. */}
       {board.obsDate && attention.length === 0 && calm.length > 0 && (
-        <p className="rounded-lg border border-neutral-200 px-4 py-4 text-sm dark:border-neutral-800">
-          {COPY.allNormal}
-        </p>
+        <p className={`${PANEL} px-4 py-4 text-sm`}>{COPY.allNormal}</p>
       )}
 
       {calm.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className={`text-sm font-medium ${MUTED}`}>{COPY.normalPrices}</h2>
+          <h2 className={SECTION_LABEL}>
+            {COPY.normalPrices} <span className="tabular-nums">({calm.length})</span>
+          </h2>
           <div className={CARD_GRID}>
             {calm.map((alert) => (
               <AlertCard key={alert.commodity_slug} alert={alert} regionSlug={region} compact />
@@ -120,7 +128,9 @@ export default async function RegionPage({
 
       {unjudged.length > 0 && (
         <section className="flex flex-col gap-3">
-          <h2 className={`text-sm font-medium ${MUTED}`}>{COPY.notAssessed}</h2>
+          <h2 className={SECTION_LABEL}>
+            {COPY.notAssessed} <span className="tabular-nums">({unjudged.length})</span>
+          </h2>
           <p className={`text-xs leading-relaxed ${MUTED}`}>{COPY.notAssessedHelp}</p>
           <div className={CARD_GRID}>
             {unjudged.map((alert) => (

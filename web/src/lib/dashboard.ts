@@ -304,6 +304,77 @@ async function fetchPricesOn(regionId: number, obsDate: string): Promise<Map<str
   return out;
 }
 
+export type RegionSummary = Region & {
+  /** Latest settled date for this region, or null if it has none. */
+  obsDate: string | null;
+  attention: number;
+  calm: number;
+  unjudged: number;
+  /** Highest-scoring commodity needing attention — a name to put on the card. */
+  topCommodity: string | null;
+};
+
+/**
+ * One line of substance per region, for the front page.
+ *
+ * The region chooser used to carry no data at all: four names, and the reader
+ * had to pick one to learn anything. Asking for the region first is the right
+ * call (design.md — a warung buys where it is, and a national average describes
+ * nobody), but that argument is about *whose* prices are shown, not about making
+ * the first screen empty. A count of what needs attention is still that region's
+ * own number, so the rule is kept and the tap becomes an informed one.
+ *
+ * Resolved per region rather than globally, for the same reason `fetchBoard` is:
+ * the regions do not share a latest settled date.
+ */
+export async function fetchRegionSummaries(): Promise<RegionSummary[]> {
+  const regions = await fetchRegions();
+  const runId = await latestFusionRun();
+
+  const empty = (region: Region): RegionSummary => ({
+    ...region,
+    obsDate: null,
+    attention: 0,
+    calm: 0,
+    unjudged: 0,
+    topCommodity: null,
+  });
+
+  if (runId === null) return regions.map(empty);
+
+  const today = todayWIB();
+  return Promise.all(
+    regions.map(async (region) => {
+      const obsDate = await latestSettledDate(runId, region.id, today);
+      if (!obsDate) return empty(region);
+
+      const { data, error } = await db
+        .from("alerts")
+        .select("level, fusion_score, commodities(display_name)")
+        .eq("run_id", runId)
+        .eq("region_id", region.id)
+        .eq("obs_date", obsDate)
+        .order("fusion_score", { ascending: false, nullsFirst: false });
+      if (error) throw new Error(error.message);
+
+      const rows = (data ?? []) as unknown as {
+        level: Level;
+        commodities: { display_name: string } | null;
+      }[];
+      const attention = rows.filter((r) => r.level === "siaga" || r.level === "waspada");
+
+      return {
+        ...region,
+        obsDate,
+        attention: attention.length,
+        calm: rows.filter((r) => r.level === "tenang").length,
+        unjudged: rows.filter((r) => r.level === "belum_dapat_dinilai").length,
+        topCommodity: attention[0]?.commodities?.display_name ?? null,
+      };
+    }),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Commodity detail
 // ---------------------------------------------------------------------------
@@ -336,6 +407,8 @@ export type CommodityDetail = {
   zone: string | null;
   riskyWeeks: { week: number; startsOn: string }[];
   sources: SourceCredit[];
+  /** The same commodity in the other regions, most recent recorded price each. */
+  peers: PeerPrice[];
 };
 
 const DETAIL_WINDOW_DAYS = 120;
@@ -371,10 +444,13 @@ export async function fetchCommodity(
     ? baselineWindow.reduce((sum, p) => sum + (p.price as number), 0) / baselineWindow.length
     : null;
 
-  const [zone, riskyWeeks, sources] = await Promise.all([
+  const [zone, riskyWeeks, sources, peers] = await Promise.all([
     fetchZone(commodity.id as number, region.id),
     fetchRiskyWeeks(commodity.id as number, region.id),
     fetchSources(commodity.id as number, region.id),
+    obsDate
+      ? fetchPeerPrices(commodity.id as number, regionSlug, obsDate)
+      : Promise.resolve<PeerPrice[]>([]),
   ]);
 
   return {
@@ -390,7 +466,98 @@ export async function fetchCommodity(
     zone,
     riskyWeeks,
     sources,
+    peers,
   };
+}
+
+export type PeerPrice = {
+  regionSlug: string;
+  regionName: string;
+  price: number;
+  obsDate: string;
+};
+
+/**
+ * How far back from the date being shown to look for a peer's recorded price.
+ *
+ * Anchored to that date and not to today, which was a real bug: the window was
+ * measured back from `todayWIB()`, so the moment the pipeline fell any further
+ * behind than this many days — which it was, by five weeks — every region
+ * returned nothing and the comparison silently vanished from every page. The
+ * date the reader is looking at is the one the comparison has to be against
+ * anyway, or it is not a comparison.
+ */
+const PEER_WINDOW_DAYS = 14;
+
+/**
+ * The same commodity, in the other regions.
+ *
+ * This is not the national aggregate design.md rules out. That rule exists
+ * because a mean across Indonesia is nobody's price and presenting it as the
+ * reader's would be a lie; four named regional prices are each somebody's, and
+ * are labelled with whose. A warung near a boundary buys from whichever market
+ * is cheaper, and until now the product held the data to answer that and showed
+ * it to nobody.
+ *
+ * Imputed days are excluded rather than filled in. A comparison is the one place
+ * an interpolated figure does real damage — it would invite a decision about
+ * where to buy, made against a number nobody recorded. A region with no recorded
+ * price in the window is simply absent.
+ *
+ * Each row carries its own date because the regions do not settle on the same
+ * day, and a price from two days ago compared against today needs to say so.
+ */
+async function fetchPeerPrices(
+  commodityId: number,
+  currentRegionSlug: string,
+  obsDate: string,
+): Promise<PeerPrice[]> {
+  const peers = (await fetchRegions()).filter((r) => r.slug !== currentRegionSlug);
+  if (!peers.length) return [];
+
+  const from = new Date(obsDate);
+  from.setDate(from.getDate() - PEER_WINDOW_DAYS);
+
+  const { data, error } = await db
+    .from("price_daily_unified")
+    .select("region_id, obs_date, price_median")
+    .eq("commodity_id", commodityId)
+    .in(
+      "region_id",
+      peers.map((r) => r.id),
+    )
+    .eq("is_imputed", false)
+    .not("price_median", "is", null)
+    .gte("obs_date", from.toISOString().slice(0, 10))
+    .lte("obs_date", obsDate)
+    .order("obs_date", { ascending: false });
+  if (error) throw new Error(error.message);
+
+  const rows = (data ?? []) as unknown as {
+    region_id: number;
+    obs_date: string;
+    price_median: number;
+  }[];
+
+  // Date-descending, so the first row seen for a region is its latest.
+  const latest = new Map<number, { obs_date: string; price_median: number }>();
+  for (const row of rows) {
+    if (!latest.has(row.region_id)) latest.set(row.region_id, row);
+  }
+
+  return peers
+    .map((region) => {
+      const row = latest.get(region.id);
+      return row
+        ? {
+            regionSlug: region.slug,
+            regionName: region.display_name,
+            price: Number(row.price_median),
+            obsDate: row.obs_date,
+          }
+        : null;
+    })
+    .filter((p): p is PeerPrice => p !== null);
 }
 
 async function fetchSeries(
