@@ -6,6 +6,66 @@ reason, so they can be defended rather than discovered.
 
 ---
 
+## Incident — the pipeline was dead for forty days and nothing said so (2026-08-10 → 2026-09-20)
+
+The scheduled ingestion last succeeded on **2026-08-10** and then failed on
+every run for forty days — thirty-plus consecutive red runs — while the
+dashboard went on serving 2026-08-10 as its latest settled day.
+
+**Cause.** `engine/pyproject.toml` carried `readme = "../README.md"`, which
+points outside the project directory. Hatchling rejects that: *"Readme path must
+be within the project directory"*. `requires = ["hatchling"]` pins no version,
+so this began failing on the day hatchling shipped the validation rather than on
+any commit here — the repository did not change, the build tool did.
+
+The failure then moved one step down the workflow. `pip install -e . --no-deps`
+died at metadata generation, so `siap` never landed on PATH, and the run ended
+at the `if: always()` health check with `siap: command not found`, exit 127.
+Reading the log bottom-up pointed at the health check; the install step above it
+was the actual cause.
+
+**Why nobody noticed.** Every layer failed quietly in a different way:
+
+- A scheduled workflow that fails writes nothing to the database, so
+  `fetch_failures` — which exists precisely to make a failed scrape loud — had
+  nothing to record. It catches a scraper that ran and failed, not a pipeline
+  that never started.
+- The dashboard's freshness rule is designed to show the latest *settled* day,
+  and a settled day five weeks old is indistinguishable on the page from one
+  settled yesterday. The front page said "Diperbarui: 11 Agustus" in muted
+  footer type and nothing suggested that was wrong.
+- Thirty red runs sat in the Actions tab. An alert nobody receives is not an
+  alert.
+
+It surfaced only because CI went red on an unrelated pull request, in the same
+install step.
+
+**Fixed.** The `readme` field is removed rather than repointed — a repo-root
+README cannot be packaged from a subdirectory, and this package is never
+published, so the field bought nothing. Reproduced locally with build isolation
+before and after.
+
+**Alerting, now that there is some.** `daily.yml` gains a `report` job that
+opens a single `pipeline-down` issue on the first failed scheduled run, leaves
+it alone while the outage continues, and closes it automatically on the first
+run that succeeds. One issue per outage, not one per run: a daily comment for
+six weeks is the same silence by a different route. An open `pipeline-down`
+issue now means the pipeline is down right now. It uses `GITHUB_TOKEN` and
+`issues: write`, so it adds no secret, and all four of its branches were
+exercised against a stubbed `gh` before merge.
+
+**Still not covered, and worth knowing.** This catches a run that fails. It
+cannot catch a run that never happens — GitHub disables scheduled workflows in a
+repository with no activity for 60 days, and a disabled schedule produces no
+failure to report. The only thing that would catch that is the product itself
+saying how old its data is, which the dashboard still does not do.
+
+**The backlog does not fill itself.** Forty days are missing. The schedule
+ingests yesterday only; recovering the gap needs `siap backfill` per source,
+then `preprocess → analyze → cluster → seasonal → fuse`.
+
+---
+
 ## Dashboard revision — typography, hierarchy, and two things the data already held (2026-09-20)
 
 Asked for on two fronts: the dashboard looked unfinished, and it said less than

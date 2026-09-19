@@ -165,3 +165,93 @@ jobs:
       - name: Reconcile abandoned runs
         if: always()
         run: siap runs --close-stale 6
+
+  # -------------------------------------------------------------------------
+  # Tell somebody.
+  #
+  # This job exists because the pipeline died on 2026-08-10 and nothing said so
+  # for forty days. `pip install -e .` began failing on a packaging change, so
+  # `siap` was never on PATH and every scheduled run ended at
+  # `siap: command not found`. The dashboard went on serving 2026-08-10 as its
+  # latest settled day the whole time. Thirty-plus red runs sat in the Actions
+  # tab and the failure reached nobody — an alert nobody receives is not an
+  # alert.
+  #
+  # One open issue per outage, not one per run. A daily comment for six weeks is
+  # the same silence by a different route: it trains the reader to ignore it.
+  # The issue is opened on the first failure, left alone while the outage
+  # continues, and closed automatically on the first run that succeeds — so an
+  # open `pipeline-down` issue means the pipeline is down right now, and no open
+  # issue means it is running.
+  #
+  # Scheduled runs only. A manual dispatch already has somebody watching it.
+  # -------------------------------------------------------------------------
+  report:
+    name: report
+    needs: [ingest, analyse]
+    if: always() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Open or close the pipeline-down issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # Absolute, not relative: a relative link resolves against the repo in
+          # some GitHub surfaces and not in an issue body.
+          PANDUAN_URL: ${{ github.server_url }}/${{ github.repository }}/blob/main/docs/panduan.md
+          INGEST: ${{ needs.ingest.result }}
+          ANALYSE: ${{ needs.analyse.result }}
+        run: |
+          set -euo pipefail
+
+          # `gh issue create --label` fails outright on a label that does not
+          # exist, which would turn the alerting path itself into a silent
+          # failure. --force makes this idempotent.
+          gh label create pipeline-down \
+            --repo "$REPO" \
+            --color B60205 \
+            --description "The scheduled pipeline is failing" \
+            --force
+
+          existing=$(gh issue list --repo "$REPO" --label pipeline-down \
+            --state open --limit 1 --json number -q '.[0].number // empty')
+
+          if [ "$INGEST" = "success" ] && [ "$ANALYSE" = "success" ]; then
+            if [ -n "$existing" ]; then
+              gh issue comment "$existing" --repo "$REPO" \
+                --body "Pipeline jalan lagi. Run yang berhasil: $RUN_URL"
+              gh issue close "$existing" --repo "$REPO"
+              echo "Recovered; closed #$existing."
+            else
+              echo "Healthy, and nothing was open."
+            fi
+            exit 0
+          fi
+
+          if [ -n "$existing" ]; then
+            echo "Still down, already reported in #$existing. Not opening another."
+            exit 0
+          fi
+
+          gh issue create --repo "$REPO" --label pipeline-down \
+            --title "Pipeline harian berhenti sejak $(TZ=Asia/Jakarta date +%Y-%m-%d)" \
+            --body "$(cat <<EOF
+          Ingestion terjadwal gagal, jadi **data di dashboard berhenti di hari terakhir yang berhasil** dan akan terus begitu sampai ini dibereskan. Halaman tidak menampilkan apa pun yang memberi tahu pembaca bahwa datanya sudah tidak bergerak.
+
+          | job | hasil |
+          |---|---|
+          | \`ingest\` | \`$INGEST\` |
+          | \`analyse\` | \`$ANALYSE\` |
+
+          Log: $RUN_URL
+
+          Issue ini dibuat sekali per gangguan, bukan tiap hari, dan **akan tertutup sendiri** begitu ada run terjadwal yang berhasil. Selama ia terbuka, pipeline sedang mati.
+
+          Setelah diperbaiki, hari-hari yang bolong tidak terkejar sendiri — perlu \`siap backfill\` per sumber, lalu \`preprocess → analyze → cluster → seasonal → fuse\`. Langkahnya ada di [docs/panduan.md]($PANDUAN_URL).
+          EOF
+          )"
+          echo "Opened a new pipeline-down issue."
