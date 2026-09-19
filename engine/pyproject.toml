@@ -6,7 +6,14 @@ build-backend = "hatchling.build"
 name = "siap"
 version = "0.1.0"
 description = "SIAP-PANGAN analysis engine: ingestion, anomaly detection, clustering, seasonality, fusion, evaluation"
-readme = "../README.md"
+# No `readme`. It pointed at ../README.md, which hatchling refuses — "Readme
+# path must be within the project directory" — and because `requires` does not
+# pin a version, this started failing the day hatchling shipped that check
+# rather than on any commit here. `pip install -e .` then failed at metadata
+# generation, `siap` never landed on PATH, and the scheduled pipeline died at
+# `siap: command not found` for forty days while the dashboard went on serving
+# its last good day. A repo-root README cannot be packaged from a subdirectory,
+# and this package is never published, so the field bought nothing at all.
 # 3.12 rather than 3.11: numpy's bundled type stubs use `type` statement syntax,
 # which only parses on 3.12+. Claiming 3.11 support we do not type-check would be
 # worse than stating the real floor. CI runs 3.12.
