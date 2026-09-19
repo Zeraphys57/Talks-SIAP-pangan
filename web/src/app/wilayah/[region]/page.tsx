@@ -14,6 +14,7 @@ import { notFound } from "next/navigation";
 import { fetchBoard, fetchLastUpdated, fetchRegions } from "@/lib/dashboard";
 import { COPY } from "@/content/id";
 import PageFooter from "@/components/PageFooter";
+import SiteHeader from "@/components/SiteHeader";
 import AlertCard from "@/components/AlertCard";
 import { formatLongDate } from "@/lib/format";
 import { CARD_GRID, MUTED, PANEL, PAGE, SECTION_LABEL, SECTION_TITLE } from "@/lib/ui";
@@ -58,12 +59,17 @@ export default async function RegionPage({
   const unjudged = board.alerts.filter((a) => a.level === "belum_dapat_dinilai");
 
   return (
-    <main className={PAGE.board}>
+    <>
+      <SiteHeader cta={false} />
+      <main className={PAGE.board}>
       <header>
-        <Link href="/" className={`text-sm ${MUTED} underline underline-offset-2`}>
+        {/* `/` is the landing now; the chooser this page came from is /wilayah. */}
+        <Link href="/wilayah" className={`text-sm font-medium ${MUTED} hover:text-brand`}>
           &larr; {COPY.back}
         </Link>
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight">{board.regionName}</h1>
+        <h1 className="mt-3 text-2xl font-extrabold tracking-tight sm:text-3xl">
+          {board.regionName}
+        </h1>
         {board.obsDate ? (
           <p className={`mt-1 text-sm ${MUTED}`}>
             {COPY.dataFrom}: {formatLongDate(board.obsDate)}
@@ -72,7 +78,7 @@ export default async function RegionPage({
       </header>
 
       {board.todayWithheld && (
-        <p className="rounded-lg bg-neutral-100 px-4 py-3 text-xs leading-relaxed text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400">
+        <p className={`rounded-xl bg-surface-muted px-4 py-3 text-xs leading-relaxed ${MUTED}`}>
           {COPY.todayWithheld}
         </p>
       )}
@@ -141,6 +147,7 @@ export default async function RegionPage({
       )}
 
       <PageFooter lastUpdated={lastUpdated} />
-    </main>
+      </main>
+    </>
   );
 }

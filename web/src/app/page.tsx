@@ -1,106 +1,233 @@
 /**
- * Region chooser — the entry point.
+ * Landing page.
  *
- * A warung buys where it is. Asking which region first is one tap that makes
- * every number afterwards the reader's own price rather than a national average
- * that describes nobody. `nasional` exists as a series but is deliberately not
- * offered here (see docs/design.md).
+ * What it is allowed to claim is the whole design of this file. There are no
+ * testimonials, no user counts, no "dipercaya oleh" row of logos, because this
+ * project has none of those and a page whose subject is data integrity cannot
+ * open by inventing some. What it has instead is real: four named government
+ * portals, coverage counted from the database at build time, and the current
+ * state of every region shown live rather than mocked up.
  *
- * Each choice now carries that region's own headline count. The rule design.md
- * sets is about *whose* prices are shown, not about making the first screen
- * blank — and a chooser with nothing on it spent a tap before the reader learned
- * anything at all.
+ * The scope boundary — descriptive, never a forecast — sits directly under the
+ * hero buttons rather than in the footer. It is the boundary the entire system
+ * is built inside, and burying it is where overselling would start.
  */
 
 import Link from "next/link";
-import { fetchLastUpdated, fetchRegionSummaries, type RegionSummary } from "@/lib/dashboard";
+
+import { fetchLastUpdated, fetchRegionSummaries, fetchStats } from "@/lib/dashboard";
 import { COPY, LEVEL_MARK } from "@/content/id";
+import { formatLongDate } from "@/lib/format";
 import PageFooter from "@/components/PageFooter";
-import { INTERACTION, MUTED, PANEL, PAGE, SECTION_LABEL } from "@/lib/ui";
+import SiteHeader from "@/components/SiteHeader";
+import CommodityIcon from "@/components/CommodityIcon";
+import {
+  BUTTON_PRIMARY,
+  BUTTON_SECONDARY,
+  CONTAINER,
+  DISPLAY_TITLE,
+  INTERACTION,
+  MUTED,
+  PANEL,
+  SECTION_LABEL,
+  SUBTLE,
+} from "@/lib/ui";
 
 export const revalidate = 1800;
 
-/**
- * The one line under a region's name.
- *
- * The three cases are the board's three buckets, and the order of the tests is
- * the same guard the board uses: "semua bergerak wajar" may only be said when
- * something was actually found to be normal. A region whose commodities all
- * landed in `belum_dapat_dinilai` has had nothing checked, and saying it is calm
- * would be the strongest possible claim drawn from the weakest possible
- * evidence.
- */
-function summaryLine(region: RegionSummary): { mark: string; text: string; urgent: boolean } {
-  if (!region.obsDate) return { mark: LEVEL_MARK.belum_dapat_dinilai, text: COPY.regionNoData, urgent: false };
-  if (region.attention > 0) {
-    return {
-      mark: LEVEL_MARK.siaga,
-      text: COPY.regionAttention(region.attention),
-      urgent: true,
-    };
-  }
-  if (region.calm > 0) return { mark: LEVEL_MARK.tenang, text: COPY.regionAllCalm, urgent: false };
-  return { mark: LEVEL_MARK.belum_dapat_dinilai, text: COPY.regionUnjudgedOnly, urgent: false };
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-2xl font-extrabold tracking-tight tabular-nums sm:text-3xl">
+        {value}
+      </span>
+      <span className={`mt-0.5 text-xs font-medium ${MUTED}`}>{label}</span>
+    </div>
+  );
 }
 
-export default async function Home() {
-  const [regions, lastUpdated] = await Promise.all([fetchRegionSummaries(), fetchLastUpdated()]);
+export default async function Landing() {
+  const [stats, regions, lastUpdated] = await Promise.all([
+    fetchStats(),
+    fetchRegionSummaries(),
+    fetchLastUpdated(),
+  ]);
+
+  const nf = new Intl.NumberFormat("id-ID");
+  const settled = regions.find((r) => r.obsDate)?.obsDate ?? null;
 
   return (
-    <main className={PAGE.home}>
-      <header>
-        <h1 className="text-3xl font-semibold tracking-tight">{COPY.appName}</h1>
-        <p className={`mt-2 text-sm leading-relaxed ${MUTED}`}>{COPY.tagline}</p>
-      </header>
+    <>
+      <SiteHeader />
 
-      <section>
-        <h2 className={SECTION_LABEL}>{COPY.chooseRegion}</h2>
-        <p className={`mt-2 text-sm leading-relaxed ${MUTED}`}>{COPY.regionHint}</p>
+      <main className="flex min-h-dvh flex-col">
+        {/* ---- Hero ------------------------------------------------------ */}
+        <section className="hero-wash border-b border-edge">
+          <div className={`${CONTAINER} py-14 sm:py-20`}>
+            <div className="max-w-2xl">
+              <p
+                className={`inline-flex items-center gap-2 rounded-full border border-brand-soft-border bg-brand-soft px-3 py-1 text-xs font-semibold text-brand`}
+              >
+                <span aria-hidden>●</span>
+                {COPY.heroEyebrow}
+              </p>
 
-        {/* Two columns from `sm` up: four regions fit side by side without any
-            of them growing to an absurd width. Stays one column on a phone. */}
-        <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-          {regions.map((region) => {
-            const summary = summaryLine(region);
-            return (
-              <li key={region.slug}>
-                <Link
-                  href={`/wilayah/${region.slug}`}
-                  className={`flex items-center justify-between gap-3 ${PANEL} px-4 py-4 hover:border-neutral-400 dark:hover:border-neutral-600 ${INTERACTION}`}
-                >
-                  <span className="min-w-0">
-                    <span className="block text-base font-medium">{region.display_name}</span>
+              <h1 className="mt-5 text-3xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl">
+                {COPY.heroTitle}
+              </h1>
 
-                    {/* Mark then words. The mark is shape, the sentence is the
-                        signal; neither is a colour, so the card still reads for
-                        the one person in twelve who cannot separate the tones. */}
-                    <span
-                      className={`mt-1 block text-sm ${summary.urgent ? "font-medium" : MUTED}`}
-                    >
-                      <span aria-hidden className="mr-1.5 text-xs">
-                        {summary.mark}
+              <p className={`mt-5 max-w-xl text-base leading-relaxed sm:text-lg ${MUTED}`}>
+                {COPY.heroBody}
+              </p>
+
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <Link href="/wilayah" className={BUTTON_PRIMARY}>
+                  {COPY.heroCta}
+                  <span aria-hidden>&rarr;</span>
+                </Link>
+                <Link href="/sumber" className={BUTTON_SECONDARY}>
+                  {COPY.heroSecondary}
+                </Link>
+              </div>
+
+              <p className={`mt-4 text-sm ${SUBTLE}`}>{COPY.heroBoundary}</p>
+            </div>
+
+            {/* Coverage, counted rather than asserted. */}
+            <dl className="mt-12 grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-4">
+              <Stat value={nf.format(stats.commodities)} label={COPY.statCommodities} />
+              <Stat value={nf.format(stats.regions)} label={COPY.statRegions} />
+              <Stat value={nf.format(stats.sources)} label={COPY.statSources} />
+              <Stat value={nf.format(stats.observations)} label={COPY.statObservations} />
+            </dl>
+          </div>
+        </section>
+
+        {/* ---- Live state ------------------------------------------------ */}
+        <section className={`${CONTAINER} py-14 sm:py-20`}>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div className="max-w-xl">
+              <h2 className={DISPLAY_TITLE}>{COPY.liveTitle}</h2>
+              <p className={`mt-3 text-sm leading-relaxed ${MUTED}`}>{COPY.liveBody}</p>
+            </div>
+            {settled && (
+              <p className={`text-xs ${SUBTLE}`}>
+                {COPY.dataFrom}: {formatLongDate(settled)}
+              </p>
+            )}
+          </div>
+
+          <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {regions.map((region) => {
+              const urgent = region.attention > 0;
+              // A count may only be shown where something was actually
+              // assessable. Kota Yogyakarta has data but every commodity landed
+              // in `belum_dapat_dinilai`, and rendering that as "0 perlu
+              // diperhatikan" claims the region was checked and found clean —
+              // the exact reading the fourth level exists to prevent.
+              const assessed = region.obsDate !== null && (region.attention > 0 || region.calm > 0);
+              return (
+                <li key={region.slug}>
+                  <Link
+                    href={`/wilayah/${region.slug}`}
+                    className={`flex h-full flex-col gap-3 ${PANEL} p-5 hover:border-brand hover:shadow-raised ${INTERACTION}`}
+                  >
+                    <span className={SECTION_LABEL}>{region.display_name}</span>
+
+                    <span className="flex items-baseline gap-2">
+                      {/* The tint is decoration; the digit and the words beside
+                          it are what carry the meaning. */}
+                      <span
+                        className={`text-3xl font-extrabold tabular-nums ${urgent ? "text-brand" : ""}`}
+                      >
+                        {assessed ? region.attention : "—"}
                       </span>
-                      {summary.text}
+                      <span className={`text-xs font-medium ${MUTED}`}>
+                        {assessed
+                          ? COPY.needsAttention.toLowerCase()
+                          : region.obsDate
+                            ? COPY.regionUnjudgedOnly
+                            : COPY.regionNoData}
+                      </span>
                     </span>
 
-                    {region.topCommodity && (
-                      <span className={`mt-0.5 block truncate text-xs ${MUTED}`}>
-                        {COPY.regionTop(region.topCommodity, region.attention - 1)}
+                    {region.topCommodity ? (
+                      <span className="mt-auto flex items-center gap-2 text-sm font-medium">
+                        <CommodityIcon
+                          slug={region.topSlug ?? ""}
+                          className="h-5 w-5 shrink-0 text-brand"
+                        />
+                        <span className="truncate">{region.topCommodity}</span>
                       </span>
-                    )}
-                  </span>
+                    ) : assessed ? (
+                      <span className={`mt-auto text-sm ${MUTED}`}>
+                        <span aria-hidden className="mr-1.5 text-xs">
+                          {LEVEL_MARK.tenang}
+                        </span>
+                        {COPY.regionAllCalm}
+                      </span>
+                    ) : null}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
 
-                  <span aria-hidden className={`shrink-0 ${MUTED}`}>
-                    &rarr;
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
+        {/* ---- How it works ---------------------------------------------- */}
+        <section className="border-y border-edge bg-surface-muted">
+          <div className={`${CONTAINER} py-14 sm:py-20`}>
+            <h2 className={DISPLAY_TITLE}>{COPY.howTitle}</h2>
 
-      <PageFooter lastUpdated={lastUpdated} />
-    </main>
+            <ol className="mt-8 grid gap-6 sm:grid-cols-3">
+              {COPY.howSteps.map((step, i) => (
+                <li key={step.title} className={`${PANEL} p-6`}>
+                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-brand-soft text-sm font-extrabold text-brand tabular-nums">
+                    {i + 1}
+                  </span>
+                  <h3 className="mt-4 text-base font-bold tracking-tight">{step.title}</h3>
+                  <p className={`mt-2 text-sm leading-relaxed ${MUTED}`}>{step.body}</p>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        {/* ---- Provenance ------------------------------------------------- */}
+        <section className={`${CONTAINER} py-14 sm:py-20`}>
+          <div className="max-w-2xl">
+            <h2 className={DISPLAY_TITLE}>{COPY.trustTitle}</h2>
+            <p className={`mt-3 text-sm leading-relaxed ${MUTED}`}>{COPY.trustBody}</p>
+            <Link
+              href="/sumber"
+              className={`mt-6 inline-flex items-center gap-2 text-sm font-semibold text-brand ${INTERACTION}`}
+            >
+              {COPY.sourcesLink}
+              <span aria-hidden>&rarr;</span>
+            </Link>
+          </div>
+        </section>
+
+        {/* ---- Closing ---------------------------------------------------- */}
+        <section className="border-t border-edge">
+          <div className={`${CONTAINER} py-14 sm:py-20`}>
+            <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className={DISPLAY_TITLE}>{COPY.closingTitle}</h2>
+                <p className={`mt-2 text-sm ${MUTED}`}>{COPY.closingBody}</p>
+              </div>
+              <Link href="/wilayah" className={`${BUTTON_PRIMARY} shrink-0`}>
+                {COPY.heroCta}
+                <span aria-hidden>&rarr;</span>
+              </Link>
+            </div>
+
+            <div className="mt-12">
+              <PageFooter lastUpdated={lastUpdated} />
+            </div>
+          </div>
+        </section>
+      </main>
+    </>
   );
 }

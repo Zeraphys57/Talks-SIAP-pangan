@@ -6,6 +6,61 @@ reason, so they can be defended rather than discovered.
 
 ---
 
+## Commercial redesign — a landing page, and the austerity rule reversed (2026-09-20)
+
+The dashboard was judged to look unfinished for a product presented
+commercially. The previous pass had improved it from inside the constraints
+`docs/design.md` sets; this one changes the constraints, which is where the
+problem actually was.
+
+**Typography.** Plus Jakarta Sans, self-hosted through `next/font`. The rule it
+replaces — system stack, no webfont — rested on one objection: a render-blocking
+request to a third party on a slow connection. `next/font` removes that rather
+than overruling it: fetched at build, served from this origin, `display: swap`,
+no runtime connection to Google. What remains is the byte cost, which is the
+trade the reframing accepted. The face is commissioned Indonesian type.
+
+**A design system where there was none.** Semantic tokens in `globals.css` —
+surfaces, edges, brand, three shadow levels — defined once per scheme. That ends
+by construction the class of bug that put `text-neutral-500` at 4.17:1 on a dark
+background: a token cannot resolve differently per scheme by accident, because
+each scheme defines it explicitly. `assert_ui_tokens.py` stays, since it is what
+stops anyone reaching for a raw neutral again.
+
+Brand green, never red or amber — those belong to `siaga` and `waspada`, and a
+brand colour colliding with a severity level would make every surface read as a
+warning.
+
+**A landing page.** `/` is now a landing; the region chooser moved to
+`/wilayah`. What it may claim is the whole design of it: no testimonials, no
+user counts, no adoption figures, because this project has none and a page about
+data integrity cannot open by inventing some. Every number on it is counted from
+the database at build time. The scope boundary — descriptive, never a forecast —
+sits under the hero buttons rather than in the footer.
+
+**Commodity marks, a site header, depth.** Eight hand-rolled SVG shapes covering
+twelve commodities, matched on slug prefix; `aria-hidden`, with the name always
+beside them. Hand-rolled rather than an icon package, which would have been the
+largest thing on the page. A header ties the screens together, which nothing did
+before.
+
+**Two claims caught by looking at the rendered page, both of the kind this
+project exists not to make:**
+
+- The stat strip read **"5 portal resmi"**, counting `trends` because it is
+  `is_active`. `engine/config/sources.yaml` says of it outright: *"Demand-proxy
+  signal only, never a price source."* Four portals publish a price. Now four.
+- A region card read **"0 perlu diperhatikan"** for Kota Yogyakarta, where every
+  commodity had landed in `belum_dapat_dinilai`. That claims the region was
+  checked and found clean — the precise reading the fourth level was added to
+  prevent, and the same trap as "semua bahan bergerak wajar" wearing a number.
+  It renders `—` now.
+
+Neither was caught by typecheck, lint or a 65-page build, all of which passed
+while both were on the page.
+
+---
+
 ## Incident — the pipeline was dead for forty days and nothing said so (2026-08-10 → 2026-09-20)
 
 The scheduled ingestion last succeeded on **2026-08-10** and then failed on

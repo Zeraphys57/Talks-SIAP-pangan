@@ -1,10 +1,25 @@
 import type { Metadata, Viewport } from "next";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
-// Typography is the system stack, and the decision is now recorded in
-// docs/design.md §"Visual direction" rather than deferred: no webfont, so no
-// render-blocking fetch on mobile data. The stack itself lives in globals.css —
-// this file loads no font module on purpose.
+/**
+ * Plus Jakarta Sans, self-hosted.
+ *
+ * design.md ruled out a webfont because it meant a render-blocking request to a
+ * third party on a slow connection. `next/font` removes that objection rather
+ * than ignoring it: the file is fetched at build time and served from this
+ * origin, preloaded, with no runtime connection to Google at all. `display:
+ * swap` means text paints in the system stack immediately and reflows when the
+ * face arrives, so a failed or slow font costs legibility nothing.
+ *
+ * The face is commissioned Indonesian type, which is a reason to prefer it over
+ * the usual product-sans defaults for this subject in particular.
+ */
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-jakarta",
+});
 
 const DESCRIPTION =
   "Pantau harga bahan pangan dari sumber resmi. Tahu bahan mana yang sedang naik tidak wajar.";
@@ -32,8 +47,8 @@ export const viewport: Viewport = {
   // Matches the manifest and the dark background, so the phone's browser chrome
   // stops flashing white before the page paints on a slow connection.
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f8f6" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0e0c" },
   ],
 };
 
@@ -43,7 +58,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id">
+    <html lang="id" className={jakarta.variable}>
       <body className="antialiased">{children}</body>
     </html>
   );
