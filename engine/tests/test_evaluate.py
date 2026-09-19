@@ -228,3 +228,136 @@ def test_the_stratum_rule_and_the_shown_baseline_are_different_quantities() -> N
     params = load_analysis().evaluation
     assert params.stratum_a_pct_change_7d != DEFINITION_PCT
     assert BASELINE_DAYS != 7
+
+
+# ---------------------------------------------------------------------------
+# The pool, once it has been labelled
+# ---------------------------------------------------------------------------
+class _PoolCursor:
+    """Answers the queries generate_pool asks, and records what it was asked."""
+
+    def __init__(self, conn: _PoolConn) -> None:
+        self.conn = conn
+        self.sql = ""
+
+    def __enter__(self) -> _PoolCursor:
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        return False
+
+    def execute(self, sql: str, params: object = None) -> None:
+        self.sql = sql
+        self.conn.asked.append(sql)
+
+    def executemany(self, sql: str, payload: list[object]) -> None:
+        self.conn.written.extend(payload)
+
+    def fetchall(self) -> list[dict[str, object]]:
+        if "rule_hit" in self.sql:
+            return self.conn.candidates
+        if "from public.gt_labels" in self.sql:
+            return [{"n": self.conn.n_labels}]
+        if "select commodity_id, region_id, obs_date" in self.sql:
+            return self.conn.existing
+        if "avg(price_median)" in self.sql:
+            return [{"mean_price": None, "n": 0}]
+        return []
+
+
+class _PoolConn:
+    def __init__(
+        self,
+        candidates: list[dict[str, object]],
+        existing: list[dict[str, object]] | None = None,
+        n_labels: int = 0,
+    ) -> None:
+        self.candidates = candidates
+        self.existing = existing or []
+        self.n_labels = n_labels
+        self.asked: list[str] = []
+        self.written: list[object] = []
+
+    def cursor(self) -> _PoolCursor:
+        return _PoolCursor(self)
+
+    def commit(self) -> None:
+        pass
+
+
+def _candidate(day: int) -> dict[str, object]:
+    return {
+        "commodity_id": 1,
+        "region_id": 2,
+        "obs_date": date(2026, 8, day),
+        "rule_hit": True,
+        "price_median": 30000.0,
+        "prev7": 25000.0,
+        "z": 3.1,
+    }
+
+
+def _generate(conn: object, **kw: object) -> object:
+    from siap.evaluate.groundtruth import generate_pool
+
+    return generate_pool(conn, 1, load_analysis().evaluation, seed=42, **kw)  # type: ignore[arg-type]
+
+
+def test_an_unlabelled_pool_is_written_without_a_flag() -> None:
+    conn = _PoolConn([_candidate(3), _candidate(4)])
+
+    assert _generate(conn).written == 2
+    assert len(conn.written) == 2
+
+
+def test_a_labelled_pool_refuses_to_grow() -> None:
+    """The failure this guard exists for.
+
+    Re-running after a backfill re-samples from data that has grown, so rows the
+    first draw could not have seen get inserted — and the pool quietly stops
+    being what the existing labels are a sample of. `--redraw` is guarded for
+    exactly this reason; the plain path reached it without saying anything.
+    """
+    conn = _PoolConn([_candidate(3)], n_labels=798)
+
+    with pytest.raises(ValueError, match="new round"):
+        _generate(conn)
+
+    assert conn.written == [], "nothing may be inserted into a pool that has been labelled"
+
+
+def test_the_refusal_costs_nothing_to_discover() -> None:
+    """Context blobs are two queries each. Refusing after building 280 of them
+    would be several minutes of work spent on rows about to be thrown away."""
+    conn = _PoolConn([_candidate(3)], n_labels=798)
+
+    with pytest.raises(ValueError):
+        _generate(conn)
+
+    # The two queries _context is made of: the window, and the trailing mean.
+    assert not any("n_sources" in sql or "avg(price_median)" in sql for sql in conn.asked)
+
+
+def test_reading_progress_on_a_labelled_pool_is_not_refused() -> None:
+    """`siap gt-pool` is also how the coordinator reads labelling progress.
+
+    A re-run that selects only rows already in the pool writes nothing, so there
+    is nothing to refuse — the guard must not turn the progress report into an
+    error.
+    """
+    conn = _PoolConn(
+        [_candidate(3)],
+        existing=[{"commodity_id": 1, "region_id": 2, "obs_date": date(2026, 8, 3)}],
+        n_labels=798,
+    )
+
+    report = _generate(conn)
+
+    assert report.written == 0
+    assert report.skipped_existing == 1
+
+
+def test_growing_a_labelled_pool_is_possible_but_must_be_asked_for() -> None:
+    conn = _PoolConn([_candidate(3)], n_labels=798)
+
+    assert _generate(conn, allow_growth=True).written == 1

@@ -190,10 +190,32 @@ def _context(conn: Conn, commodity_id: int, region_id: int, obs_date: Any) -> di
     }
 
 
+def label_count(conn: Conn) -> int:
+    """How many labels exist. Both pool guards turn on this one number."""
+    return int(fetch_all(conn, "select count(*) as n from public.gt_labels")[0]["n"])
+
+
 def generate_pool(
-    conn: Conn, anomaly_run_id: int, params: EvaluationParams, seed: int, run_id: int | None = None
+    conn: Conn,
+    anomaly_run_id: int,
+    params: EvaluationParams,
+    seed: int,
+    run_id: int | None = None,
+    allow_growth: bool = False,
 ) -> PoolReport:
-    """Build the stratified pool. Idempotent: existing candidates are left alone."""
+    """Build the stratified pool. Idempotent: existing candidates are left alone.
+
+    Refuses to *add* candidates once any label exists, unless `allow_growth`.
+    Skipping rows that are already there is not enough to make a re-run safe:
+    the sampler draws from whatever data exists now, so running this again after
+    a backfill selects dates that did not exist at the first draw and inserts
+    them. The pool then quietly stops being the thing the labels are a sample
+    of — the same failure `clear_pool` refuses, reached without the flag that
+    sounds dangerous.
+
+    Re-running to read the progress summary stays safe: the refusal is raised
+    only when there is something new to write.
+    """
     report = PoolReport()
     rng = random.Random(seed)
 
@@ -218,7 +240,7 @@ def generate_pool(
         )
     }
 
-    payload = []
+    fresh = []
     for row, stratum in [(r, STRATUM_FLAGGED) for r in flagged] + [
         (r, STRATUM_CONTROL) for r in control
     ]:
@@ -226,19 +248,35 @@ def generate_pool(
         if key in existing:
             report.skipped_existing += 1
             continue
-        payload.append(
-            (
-                int(row["commodity_id"]),
-                int(row["region_id"]),
-                row["obs_date"],
-                stratum,
-                rng.random(),
-                Json(
-                    _context(conn, int(row["commodity_id"]), int(row["region_id"]), row["obs_date"])
-                ),
-                run_id,
+        fresh.append((row, stratum))
+
+    # Before building a single context blob: each one costs two queries, and
+    # refusing after several minutes of work would be a worse way to say no.
+    if fresh and not allow_growth:
+        n_labels = label_count(conn)
+        if n_labels:
+            raise ValueError(
+                f"{len(fresh)} new candidate(s) would be added to a pool that {n_labels} "
+                f"label(s) are already a sample of. The data has grown since the pool was "
+                f"drawn, so re-sampling now selects dates that did not exist then.\n"
+                f"  To read the pool and labelling progress, this command is safe — it "
+                f"refuses only because there is something new to write.\n"
+                f"  If the pool genuinely has to grow, that is a new round: pass --grow, "
+                f"keep this one, report both, and say why in the paper."
             )
+
+    payload = [
+        (
+            int(row["commodity_id"]),
+            int(row["region_id"]),
+            row["obs_date"],
+            stratum,
+            rng.random(),
+            Json(_context(conn, int(row["commodity_id"]), int(row["region_id"]), row["obs_date"])),
+            run_id,
         )
+        for row, stratum in fresh
+    ]
 
     if payload:
         with conn.cursor() as cur:
@@ -266,7 +304,7 @@ def clear_pool(conn: Conn) -> int:
     silently change what every downstream number is a statement about, and no
     amount of re-running would reveal that it had happened.
     """
-    n_labels = int(fetch_all(conn, "select count(*) as n from public.gt_labels")[0]["n"])
+    n_labels = label_count(conn)
     if n_labels:
         raise ValueError(
             f"{n_labels} label(s) already exist. The pool is what those labels are a "

@@ -1104,7 +1104,12 @@ def fuse_cmd(board: int) -> None:
     is_flag=True,
     help="Discard and re-sample the pool. Refuses once any label exists.",
 )
-def gt_pool_cmd(refresh_context: bool, redraw: bool) -> None:
+@click.option(
+    "--grow",
+    is_flag=True,
+    help="Allow new candidates to be added to an already-labelled pool. That is a new round.",
+)
+def gt_pool_cmd(refresh_context: bool, redraw: bool, grow: bool) -> None:
     """Generate the stratified ground-truth candidate pool (§7.1)."""
     from .config import load_analysis
     from .evaluate.groundtruth import clear_pool, generate_pool, labelling_progress, pool_summary
@@ -1140,7 +1145,9 @@ def gt_pool_cmd(refresh_context: bool, redraw: bool) -> None:
             )
             status = "failed"
             try:
-                report = generate_pool(conn, anomaly_run, cfg.evaluation, cfg.seed, run.id)
+                report = generate_pool(
+                    conn, anomaly_run, cfg.evaluation, cfg.seed, run.id, allow_growth=grow
+                )
                 run.note(
                     f"pool: {report.stratum_a} rule_flagged + {report.stratum_b} "
                     f"random_control = {report.total}; {report.written} written, "
@@ -1151,7 +1158,10 @@ def gt_pool_cmd(refresh_context: bool, redraw: bool) -> None:
                 run.finish(status)
             summary = pool_summary(conn)
             progress = labelling_progress(conn)
-    except (MissingSetting, DatabaseError, ConfigError) as exc:
+    # ValueError is how both pool guards refuse — clear_pool on a labelled pool,
+    # and generate_pool on one it would grow. Without it here they surfaced as a
+    # traceback, which reads like a crash rather than the deliberate refusal it is.
+    except (MissingSetting, DatabaseError, ConfigError, ValueError) as exc:
         _fatal(str(exc))
         return
 
